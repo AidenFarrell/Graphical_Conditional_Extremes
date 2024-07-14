@@ -84,13 +84,9 @@ get_separators <- function(cliques, includeSingletons = FALSE){
 
 ################################################################################
 #Coles and Tawn (1991) semi-parametric approach for transformation to uniform margins
-semiparametric_unif_transform <- function(data, u, par){
+semiparametric_unif_transform <- function(data, u, scale, shape){
   #get length of data
   n <- length(data)
-  
-  #extract MLEs
-  scale <- par[1]
-  shape <- par[2]
   
   #get index
   index <- which(data > u)
@@ -114,11 +110,12 @@ semiparametric_unif_transform <- function(data, u, par){
   return(z)
 }
 
-semiparametric_gpd_transform <- function(p, u_unif, u_orig, par, distFun){
+semiparametric_gpd_transform <- function(p, u_unif, gpd_par, distFun){
   
   # extract MLEs
-  scale <- par[1]
-  shape <- par[2]
+  u <- gpd_par[1]
+  scale <- gpd_par[2]
+  shape <- gpd_par[3]
   
   #index
   index <- which(p <= u_unif)
@@ -126,10 +123,10 @@ semiparametric_gpd_transform <- function(p, u_unif, u_orig, par, distFun){
   #get the output
   if(is_empty(index)){
     if(abs(shape) <= 1e-6){
-      z <- u_orig + scale*log((1 - u_unif)/(1 - p))
+      z <- u + scale*log((1 - u_unif)/(1 - p))
     }
     else{
-      z <- u_orig + (scale/shape)*(((1 - u_unif)/(1 - p))^(shape) - 1)
+      z <- u + (scale/shape)*(((1 - u_unif)/(1 - p))^(shape) - 1)
     }
   }
   else{
@@ -158,21 +155,8 @@ semiparametric_gpd_transform <- function(p, u_unif, u_orig, par, distFun){
 
 X_to_Laplace <- function(x, q, k = 200, m = 500){
   ## Checks on the inputs
-  if(!is.numeric(x)){
-    stop("x must be a vector")
-  }
-  if(!is.numeric(q)){
-    stop("q must be a vector of probabilities")
-  }
-  if(min(q) <= 0.5 | max(q) > 0.999){
-    stop("q must be between 0.5 and 0.999 exclusive")
-  }
-  if(k <= 0 | k %% 1 != 0){
-    stop("Number of bootstrapped samples must be a positive integer")
-  }
-  if(m <= 0 | m %% 1 != 0){
-    stop("Number of equally spaced probabilities must be a positive integer")
-  }
+  if(!is.numeric(q)){stop("q must be a vector of probabilities")}
+  if(min(q) <= 0.5 | max(q) > 0.999){stop("q must be in the interval (0.5, 0.999)")}
   
   ## Perform the threshold selection
   u_poss <- quantile(x, q)
