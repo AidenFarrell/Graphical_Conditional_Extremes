@@ -1,4 +1,9 @@
 ################################################################################
+## Adding required packages
+required_pckgs <- c("evd", "fake", "fields", "ggplot2", "ggpubr", "glasso", "graphicalExtremes", "gridExtra", "gtools", "igraph", "jmuOutlier", "LaplacesDemon", "matrixcalc", "mev", "moments", "parallel", "ppcor", "pracma", "purrr", "rgl", "rlang", "scales", "SpatialExtremes", "texmex")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
 #functions re cliques from Engleke Github
 
 #' Get Cliques and Separators of a graph
@@ -78,80 +83,6 @@ get_separators <- function(cliques, includeSingletons = FALSE){
 }
 
 ################################################################################
-## transform vectors from uniform to Laplace margins
-unif_to_laplace <- function(x){
-  #conditions
-  if(!is.null(dim(x))){
-    stop("x must be a vector")
-  }
-  #set-up
-  n <- length(x)
-  
-  if(n == 1){
-    if(x < 1/2){
-      z <- log(2*x)
-    }
-    else{
-      z <- -log(2*(1 - x))
-    }
-  }
-  else{
-    z <- rep(NA, n)
-    
-    #determine which values are less than 1/2
-    index <- which(x < 1/2)
-    
-    #do the transformation
-    if(is_empty(index)){
-      z <- -log(2*(1 - x)) 
-    }
-    else{
-      z[index] <- log(2*x[index])
-      z[-index] <- -log(2*(1 - x[-index]))  
-    }
-  }
-  
-  #return the output
-  return(z)
-}
-
-## transform vectors from Laplace to uniform margins
-laplace_to_unif <- function(x){
-  #conditions
-  if(!is.null(dim(x))){
-    stop("x must be a vector")
-  }
-  #set-up
-  n <- length(x)
-  
-  if(n == 1){
-    if(x < 0){
-      z <- exp(x)/2
-    }
-    else{
-      z <- 1 - exp(-x)/2
-    }
-  }
-  else{
-    z <- rep(NA, n)
-    
-    #determine which values are less than 1/2
-    index <- which(x < 0)
-    
-    #do the transformation
-    if(is_empty(index)){
-      z <- 1 - exp(-x)/2 
-    }
-    else{
-      z[index] <- exp(x[index])/2
-      z[-index] <- 1 - exp(-x[-index])/2  
-    }
-  }
-  
-  #return the output
-  return(z)
-}
-
 #Coles and Tawn (1991) semi-parametric approach for transformation to uniform margins
 semiparametric_unif_transform <- function(data, u, par){
   #get length of data
@@ -253,7 +184,7 @@ X_to_Laplace <- function(x, q, k = 200, m = 500){
   par_star <- u_out$par
   
   ## Transform the data onto Laplace margins
-  y <- unif_to_laplace(semiparametric_unif_transform(data = x, u = u_star, par = par_star))
+  y <- qlaplace(semiparametric_unif_transform(data = x, u = u_star, par = par_star))
   
   ## Output
   out <- list(X = x,
@@ -5574,7 +5505,7 @@ Prob_Joint_Large_Sample_Z <- function(data, cond = 1, n_excesses, Z, a, b, scale
   
   ## Step 1 - Simulate Yi| Yi > ti(u_{X_{i}}) from a Laplace distribution
   ui <- replicate(n = B, expr = runif(n = n_excesses, min = u_unif), simplify = FALSE)
-  Yi <- lapply(ui, unif_to_laplace)
+  Yi <- lapply(ui, qlaplace)
   Xi <- lapply(ui, function(u){qgpd(p = 1 - (1 - u)/(1 - qu_orig[cond]), 
                                     mu = u_orig[cond], 
                                     scale = scale_gpd[cond], 
@@ -5591,7 +5522,7 @@ Prob_Joint_Large_Sample_Z <- function(data, cond = 1, n_excesses, Z, a, b, scale
                   .f = function(a, b, z){a + b*z})
   
   ## Step 3 - transform Y onto X
-  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, laplace_to_unif, simplify = FALSE)})
+  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, plaplace, simplify = FALSE)})
   
   X_not_i <- lapply(U_not_i, function(u){do.call(cbind, pmap(.l = list(x = u,
                                                                        data = data_list[-cond],
@@ -5630,7 +5561,7 @@ Prob_Joint_Large_Simulate_MVN <- function(data, cond = 1, n_excesses, a, b, mu, 
   
   ## Step 1 - Simulate Yi| Yi > ti(u_{X_{i}}) from a Laplace distribution
   ui <- replicate(n = B, expr = runif(n = n_excesses, min = u_unif), simplify = FALSE)
-  Yi <- lapply(ui, unif_to_laplace)
+  Yi <- lapply(ui, qlaplace)
   Xi <- lapply(ui, function(u){qgpd(p = 1 - (1 - u)/(1 - qu_orig[cond]), 
                                     mu = u_orig[cond], 
                                     scale = scale_gpd[cond], 
@@ -5646,7 +5577,7 @@ Prob_Joint_Large_Simulate_MVN <- function(data, cond = 1, n_excesses, a, b, mu, 
                   .f = function(a, b, z){a + b*z})
   
   ## Step 3 - transform Y onto X
-  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, laplace_to_unif, simplify = FALSE)})
+  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, plaplace, simplify = FALSE)})
   
   X_not_i <- lapply(U_not_i, function(u){do.call(cbind, pmap(.l = list(x = u,
                                                                        data = data_list[-cond],
@@ -5682,7 +5613,7 @@ Prob_Joint_Large_Simulate_MVAGGD <- function(data, cond = 1, n_excesses, a, b, l
   data_list <- lapply(apply(data, 2, list), function(x){x[[1]]})
   ## Step 1 - Simulate Yi| Yi > ti(u_{X_{i}}) from a Laplace distribution
   ui <- replicate(n = B, expr = runif(n = n_excesses, min = u_unif), simplify = FALSE)
-  Yi <- lapply(ui, unif_to_laplace)
+  Yi <- lapply(ui, qlaplace)
   Xi <- lapply(ui, function(u){qgpd(p = 1 - (1 - u)/(1 - qu_orig[cond]), 
                                     mu = u_orig[cond],
                                     scale = scale_gpd[cond],
@@ -5698,7 +5629,7 @@ Prob_Joint_Large_Simulate_MVAGGD <- function(data, cond = 1, n_excesses, a, b, l
   Y_not_i <- pmap(.l = list(a = a_yi_hat_sim, b = b_yi_hat_sim, z = Z_star_simulate),
                   .f = function(a, b, z){a + b*z})
   ## Step 3 - transform Y onto X
-  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, laplace_to_unif, simplify = FALSE)})
+  U_not_i <- lapply(Y_not_i, function(y){apply(y, 2, plaplace, simplify = FALSE)})
   X_not_i <- lapply(U_not_i, function(u){do.call(cbind, pmap(.l = list(x = u,
                                                                        data = data_list[-cond],
                                                                        qu = qu_orig[-cond],
