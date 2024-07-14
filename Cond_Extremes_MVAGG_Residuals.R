@@ -153,7 +153,7 @@ semiparametric_gpd_transform <- function(p, u_unif, gpd_par, distFun){
 ## Uses the semi-parametric method of Coles & Tawn (1991) to do this
 ## Threshold is selected using Murphy et al. (2024)
 
-X_to_Laplace <- function(x, q, k = 200, m = 500){
+X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   ## Checks on the inputs
   if(!is.numeric(q)){stop("q must be a vector of probabilities")}
   if(min(q) <= 0.5 | max(q) > 0.999){stop("q must be in the interval (0.5, 0.999)")}
