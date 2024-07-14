@@ -165,17 +165,19 @@ X_to_Laplace <- function(x, q, k = 200, m = 500){
   ## Get the output from the threshold selection
   u_star <- u_out$thresh
   qu_star <- q[which(u_poss == u_star)]
-  par_star <- u_out$par
+  scale_star <- u_out$par[1]
+  shape_star <- u_out$par[2]
   
   ## Transform the data onto Laplace margins
-  y <- qlaplace(semiparametric_unif_transform(data = x, u = u_star, par = par_star))
+  y <- qlaplace(semiparametric_unif_transform(data = x, u = u_star, scale = scale_star, shape = shape_star))
   
   ## Output
   out <- list(X = x,
               Y = y,
               u = u_star,
               qu = qu_star,
-              par = par_star)
+              scale = scale_star,
+              scale = shape_star)
   return(out)
   
 }
