@@ -1,9 +1,4 @@
 ################################################################################
-## Adding required packages
-required_pckgs <- c("evd", "fake", "fields", "ggplot2", "ggpubr", "glasso", "graphicalExtremes", "gridExtra", "gtools", "igraph", "jmuOutlier", "LaplacesDemon", "matrixcalc", "mev", "moments", "parallel", "ppcor", "pracma", "purrr", "rgl", "rlang", "scales", "SpatialExtremes", "texmex")
-t(t(sapply(required_pckgs, require, character.only = TRUE)))
-
-################################################################################
 #functions re cliques from Engleke Github
 
 #' Get Cliques and Separators of a graph
@@ -179,7 +174,6 @@ X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
               scale = scale_star,
               scale = shape_star)
   return(out)
-  
 }
 
 ################################################################################
@@ -344,7 +338,151 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
   # }
 }
 
-qfun <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
+################################################################################
+## Above but with the profile log-likelihood using cliques and separators
+Cond_extremes_graph <- function(data, cond = 1, graph = NA, 
+                                constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
+                                maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
+  
+  #get information from the data
+  dim_data <- dim(data)
+  if(is.null(dim_data)){
+    stop("Data must be a matrix with at least d = 2 columns")
+  }
+  else{
+    d <- dim_data[2]
+    n <- dim_data[1]
+  }
+  dependent <- (1:d)[-cond]
+  
+  ## check the conditioning random variable is valid
+  if(length(cond) > 1){
+    stop("cond must be of length 1")
+  }
+  else if(cond%%1 != 0 | cond <= 0 | cond > d){
+    stop("cond must be a single positie integer")
+  }
+  
+  ## get the starting parameters
+  if(missing(start)){
+    start <- c(0.1, 0.1)
+  }
+  else if(!is.numeric(start)){
+    stop("start must be a vector")
+  }
+  else if(length(start) > 2){
+    stop("start must be a vector")
+  }
+  else if(any(abs(start)) > 1){
+    stop("Initial starting values are outside the parameter sapce")
+  }
+  if(length(start) == 2){
+    start <- matrix(rep(start, d-1), ncol = 2)
+  }
+  
+  #separate data into the conditioning and unconditioned random variables
+  yex <- data[,cond]
+  ydep <- data[,-cond]
+  
+  #determine the components in the model
+  if(!is_igraph(graph)){
+    warning("\nNo graphical structure has been provided.\n \nWe assume the residuals are IID Guassian random variables.")
+    
+    ## Fit the model
+    res <- lapply(1:(d-1), function(i){
+      qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
+                 constrain = constrain, aLow = aLow, q = q, v = v,
+                 maxit = maxit, start = start[i,], nOptim = nOptim)})
+    
+    #get the output
+    out <- list()
+    out$par$a <- matrix(do.call(c, lapply(res, function(x){x$par$a})), nrow = 1)
+    out$par$b <- matrix(do.call(c, lapply(res, function(x){x$par$b})), nrow = 1)
+    out$par$mu <- matrix(do.call(c, lapply(res, function(x){x$par$mu})), nrow = 1)
+    
+    Sigma_out <- matrix(0, ncol = d-1, nrow = d-1)
+    for(i in 1:length(cliques)){
+      Sigma_elements <- permutations(n = length(cliques[[i]]), r = 2, v = cliques[[i]], repeats.allowed = TRUE)
+      Sigma_out[Sigma_elements] <-  res[[i]]$par$Sigma
+    }
+    out$par$Sigma <- Sigma_out
+    
+    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
+      sapply(dependent, function(x){paste0("Column", x)})
+    
+    out$loglike <- sapply(res, function(x){-x$value})
+    out$convergence <- sapply(res, function(x){x$convergence})
+    out$Z <- do.call(cbind, lapply(res, function(x){x$Z}))
+  }
+  else{
+    #Graph is provided so we need to figure out which edges are present
+    graph_cond <- delete.vertices(graph, cond)
+    graphs_ind <- lapply(1:d, delete.vertices, graph = graph)
+    comps_ind <- lapply(graphs_ind, components)
+    comps_ind_unique <- sapply(comps_ind, function(x){length(unique(x$membership))})
+    if(any(comps_ind_unique != 1)){
+      inc_sings <- TRUE
+    }
+    else{
+      inc_sings <- FALSE
+    }
+    #get the cliques and the separators in the graph
+    cliques <- order_cliques(get_cliques_and_separators(graph_cond))
+    #now get the separators but we only include singletons a vertex only appears once in a clique of length two
+    seps <- get_separators(cliques, includeSingletons = inc_sings)
+    #check there is no cross over. If there is remove from the clique set
+    index <- which(cliques %in% intersect(cliques, seps))
+    if(length(index) != 0){
+      cliques <- cliques[-index]
+    }
+    
+    #sort the cliques and separators into ascending order
+    cliques <- order_cliques(cliques)
+    
+    cliques <- lapply(cliques, function(x){sort(x)})
+    seps <- lapply(seps, function(x){sort(x)})
+  }
+  
+  #fit the profile log-likelihood
+  if(is_empty(seps)){
+    res <- lapply(cliques, function(x){
+      qfun(yex = yex, ydep = as.matrix(ydep[,x]), 
+           constrain = constrain, aLow = aLow, q = q, v = v,
+           maxit = maxit, start = start[x,], nOptim = nOptim)}) 
+    
+    return(out)
+  }
+  else{
+    Sigma_zero <- matrix(0, d-1, d-1)
+    Sig_non_zero <- upper.tri(Sigma_zero, diag = TRUE)
+    # Sig_non_zero <- as_edgelist(graph_cond)
+    # Sig_non_zero <- rbind(Sig_non_zero, 
+    #                       matrix(rep(1:(d-1), 2), ncol = 2))
+    
+    res <- qfun_new(yex = yex, ydep = as.matrix(ydep), comps = 1:(d-1), 
+                    constrain = constrain, aLow = aLow, q = q, v = v,
+                    cliques = cliques, seps = seps, Sig_non_zero = Sig_non_zero,
+                    maxit = maxit, start = start, nOptim = nOptim) 
+    
+    #get the output
+    out <- list()
+    out$par$a <- matrix(res$par$a, nrow = 1)
+    out$par$b <- matrix(res$par$b, nrow = 1)
+    out$par$mu <- matrix(res$par$mu, nrow = 1)
+    out$par$Sigma <- matrix(res$par$Sigma, nrow = d - length(cond), ncol = d-length(cond))
+    
+    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
+      sapply(dependent, function(x){paste0("Column", x)})
+    
+    out$loglike <- -res$value
+    out$convergence <- res$convergence
+    out$Z <- res$Z
+    
+    return(out)
+  }
+}
+
+qfun_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
   
   #function for the optim to optimise over
   Qpos <- function(param, yex, ydep, constrain, q, v, aLow){
@@ -354,7 +492,7 @@ qfun <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
     b <- param[(d + 1):length(param)]
     
     #get the value of the profile log_likelihood for fixed a and b
-    res <- ProfileLogLik_a_b(yex, ydep, a, b, constrain, q, v, aLow)
+    res <- ProfileLogLik_a_b_indep(yex, ydep, a, b, constrain, q, v, aLow)
     res$profLik
   }
   
@@ -441,7 +579,7 @@ qfun <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
 }
 
 #function for the profile log-likelihood
-ProfileLogLik_a_b <- function(yex, ydep, a, b, constrain = TRUE, q, v = 10, aLow = -1){
+ProfileLogLik_a_b_indep <- function(yex, ydep, a, b, constrain = TRUE, q, v = 10, aLow = -1){
   
   #get the residuals
   a_yi <- sapply(a, function(x){yex*x})
@@ -453,12 +591,12 @@ ProfileLogLik_a_b <- function(yex, ydep, a, b, constrain = TRUE, q, v = 10, aLow
   sigma <- cov(Z)
   
   #get the negative log-likelihood for the given parameters
-  nllh <- negloglike(yex, ydep, a_yi, b_yi, a, b, mu, sigma, constrain, q, v, aLow)
+  nllh <- negloglike_indep(yex, ydep, a_yi, b_yi, a, b, mu, sigma, constrain, q, v, aLow)
   res <- list(profLik = nllh, mu = mu, sigma = sigma)
   return(res)
 }
 
-negloglike <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v, aLow){
+negloglike_indep <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v, aLow){
   
   #conditions on the parameters
   Delta <- 10^40
@@ -521,170 +659,6 @@ negloglike <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v, aLo
     }
   }
   res
-}
-
-################################################################################
-## Above but with the profile log-likelihood using cliques and separators
-Cond_extremes_graph_new <- function(data, cond, graph = NA, 
-                                    constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
-                                    maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
-  
-  theCall <- match.call()
-  # if (!inherits(x, "migpd")) 
-  #   stop("you need to use an object created by migpd")
-  # margins <- list(casefold(margins), p2q = switch(casefold(margins), 
-  #                                                 gumbel = function(p) -log(-log(p)), laplace = function(p) ifelse(p < 
-  #                                                                                                                    0.5, log(2 * p), -log(2 * (1 - p)))), q2p = switch(casefold(margins), 
-  #                                                                                                                                                                       gumbel = function(q) exp(-exp(-q)), laplace = function(q) ifelse(q < 
-  #                                                                                                                                                                                                                                          0, exp(q)/2, 1 - 0.5 * exp(-q))))
-  # x <- mexTransform(x, margins = margins, method = marTransform, 
-  #                   r = referenceMargin)
-  # x$referenceMargin <- referenceMargin
-  # if (margins[[1]] == "gumbel" & constrain) {
-  #   warning("With Gumbel margins, you can't constrain, setting constrain=FALSE")
-  #   constrain <- FALSE
-  # }
-  
-  #need to update this section of code
-  if(missing(cond)){
-    message("Missing 'cond'. Conditioning on", dimnames(x$transformed)[[2]][1], "\n")
-    cond <- 1
-  }
-  else if(length(cond) > 1){
-    stop("cond must be of length 1")
-  }
-  else if(is.character(cond)){ 
-    cond <- match(cond, dimnames(x$transformed)[[2]])
-  }
-  # if(missing(dqu)){
-  #   message("Assuming same quantile for dependence thesholding as was used \n     to fit corresponding marginal model...\n")
-  #   dqu <- x$mqu[cond]
-  # }
-  # dth <- quantile(x$transformed[, cond], dqu)
-  
-  #get information from the data
-  dim_data <- dim(data)
-  if(is.null(dim_data)){
-    stop("Data must be a matrix with at least d = 2 columns")
-  }
-  else{
-    d <- dim_data[2]
-    n <- dim_data[1]
-  }
-  dependent <- (1:(dim(data)[[2]]))[-cond]
-  # if(length(dqu) < length(dependent)){
-  #   dqu <- rep(dqu, length = length(dependent))
-  #   aLow <- if else(margins[[1]] == "gumbel", 10^(-10), -1 + 10^(-10))
-  # }
-  if(missing(start)){
-    start <- c(0.1, 0.1)
-  }
-  else if(inherits(start, "mex")){
-    start <- start$dependence$coefficients[1:2,]
-  }
-  if(length(start) == 2){
-    start <- matrix(rep(start, d-1), ncol = 2)
-  }
-  
-  #determine the components in the model
-  if(!is_igraph(graph)){
-    warning("\nNo graphical structure has been provided.\n \nWe assume the residuals are IID Guassian random variables.")
-    cliques <- sapply(1:(d - length(cond)), list)
-    seps <- list()
-  }
-  else{
-    #Graph is provided so we need to figure out the separators and the cliques
-    
-    #determine if removing a single nodes results in more than one component
-    #If it does it is a separator and we need to include single separators
-    graph_cond <- delete.vertices(graph, cond)
-    graphs_ind <- lapply(1:d, delete.vertices, graph = graph)
-    comps_ind <- lapply(graphs_ind, components)
-    comps_ind_unique <- sapply(comps_ind, function(x){length(unique(x$membership))})
-    if(any(comps_ind_unique != 1)){
-      inc_sings <- TRUE
-    }
-    else{
-      inc_sings <- FALSE
-    }
-    #get the cliques and the separators in the graph
-    cliques <- order_cliques(get_cliques_and_separators(graph_cond))
-    #now get the separators but we only include singletons a vertex only appears once in a clique of length two
-    seps <- get_separators(cliques, includeSingletons = inc_sings)
-    #check there is no cross over. If there is remove from the clique set
-    index <- which(cliques %in% intersect(cliques, seps))
-    if(length(index) != 0){
-      cliques <- cliques[-index]
-    }
-    
-    #sort the cliques and separators into ascending order
-    cliques <- order_cliques(cliques)
-    
-    cliques <- lapply(cliques, function(x){sort(x)})
-    seps <- lapply(seps, function(x){sort(x)})
-  }
-  
-  #separate data into the conditioning and unconditioned random variables
-  yex <- data[,cond]
-  ydep <- data[,-cond]
-  
-  #fit the profile log-likelihood
-  if(is_empty(seps)){
-    res <- lapply(cliques, function(x){
-      qfun(yex = yex, ydep = as.matrix(ydep[,x]), 
-           constrain = constrain, aLow = aLow, q = q, v = v,
-           maxit = maxit, start = start[x,], nOptim = nOptim)}) 
-    
-    #get the output
-    out <- list()
-    out$par$a <- matrix(do.call(c, lapply(res, function(x){x$par$a})), nrow = 1)
-    out$par$b <- matrix(do.call(c, lapply(res, function(x){x$par$b})), nrow = 1)
-    out$par$mu <- matrix(do.call(c, lapply(res, function(x){x$par$mu})), nrow = 1)
-    
-    Sigma_out <- matrix(0, ncol = d-1, nrow = d-1)
-    for(i in 1:length(cliques)){
-      Sigma_elements <- permutations(n = length(cliques[[i]]), r = 2, v = cliques[[i]], repeats.allowed = TRUE)
-      Sigma_out[Sigma_elements] <-  res[[i]]$par$Sigma
-    }
-    out$par$Sigma <- Sigma_out
-    
-    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
-      sapply(dependent, function(x){paste0("Column", x)})
-    
-    out$loglike <- sapply(res, function(x){-x$value})
-    out$convergence <- sapply(res, function(x){x$convergence})
-    out$Z <- do.call(cbind, lapply(res, function(x){x$Z}))
-    
-    return(out)
-  }
-  else{
-    Sigma_zero <- matrix(0, d-1, d-1)
-    Sig_non_zero <- upper.tri(Sigma_zero, diag = TRUE)
-    # Sig_non_zero <- as_edgelist(graph_cond)
-    # Sig_non_zero <- rbind(Sig_non_zero, 
-    #                       matrix(rep(1:(d-1), 2), ncol = 2))
-    
-    res <- qfun_new(yex = yex, ydep = as.matrix(ydep), comps = 1:(d-1), 
-                    constrain = constrain, aLow = aLow, q = q, v = v,
-                    cliques = cliques, seps = seps, Sig_non_zero = Sig_non_zero,
-                    maxit = maxit, start = start, nOptim = nOptim) 
-    
-    #get the output
-    out <- list()
-    out$par$a <- matrix(res$par$a, nrow = 1)
-    out$par$b <- matrix(res$par$b, nrow = 1)
-    out$par$mu <- matrix(res$par$mu, nrow = 1)
-    out$par$Sigma <- matrix(res$par$Sigma, nrow = d - length(cond), ncol = d-length(cond))
-    
-    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
-      sapply(dependent, function(x){paste0("Column", x)})
-    
-    out$loglike <- -res$value
-    out$convergence <- res$convergence
-    out$Z <- res$Z
-    
-    return(out)
-  }
 }
 
 #Might be able to get rid of the comps argument
@@ -880,6 +854,144 @@ negloglike_new <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v,
     }
   }
   res
+}
+
+qfun_HT <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
+  
+  #function for the optim to optimise over
+  Qpos <- function(param, yex, ydep, constrain, q, v, aLow){
+    ## Extract the starting parameters
+    a <- param[1]
+    b <- param[2]
+    
+    ## Get the residuals
+    a_yi <- yex*a
+    b_yi <- yex^b
+    Z <- (ydep - a_yi)/b_yi
+    
+    ## Obtain the mean and covariance matrix of the residuals
+    mu <- mean(Z)
+    sigma <- as.numeric(var(Z))
+    
+    ## Conditions on the parameters
+    Delta <- 10^40
+    delta <- 10^(-10)
+    if(any(a < aLow[1]) | any(a > 1 - delta) | any(b > 1 - delta)){
+      res <- Delta
+    }
+    else{
+      mu <- a_yi + mu*b_yi
+      sigma <- sigma*(b_yi^2)
+      res <- -sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
+    }
+    
+    if(is.infinite(res)){
+      if(res < 0) {
+        res <- -Delta
+      }
+      else{ 
+        res <- Delta
+      }
+      warning("Infinite value of Q in mexDependence")
+    }
+    
+    #Checks if the constraints are satisfied to reduce the parameter space
+    else if(constrain){ 
+      zpos <- quantile(ydep - yex, probs = q)
+      z <- quantile(Z, probs = q)
+      zneg <- quantile(ydep + yex, probs = q)
+      
+      constraints_sat <- texmex:::ConstraintsAreSatisfied(a, b, z, zpos, zneg, v)
+      
+      # constraints_sat <- sapply(pmap(.l = list(a = a, b = b, z1 = z, zpos1 = zpos, zneg1 = zneg),
+      #                                .f = function(a, b, z1, zpos1, zneg1){
+      #                                  pmap(.l = list(a = a, b = b, z = z1, zpos = zpos1, zneg = zneg1), 
+      #                                       .f = texmex:::ConstraintsAreSatisfied, v)}), function(x){all(x == TRUE)})
+      if(!all(constraints_sat)){
+        res <- Delta
+      }
+    }
+    res
+  }
+  
+  fit <- try(optim(par = start, fn = Qpos, control = list(maxit = maxit),
+                   yex = yex, ydep = ydep,
+                   constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
+             silent = TRUE)
+  if(inherits(fit, "try-error")){
+    warning("Error in optim call from Cond_extremes_graph")
+    out <- list()
+    out$par <- list(a = rep(NA, times = length(comps)),
+                    b = rep(NA, times = length(comps)),
+                    mu = rep(NA, times = length(comps)),
+                    Sigma = diag(NA, length(comps)))
+    out$value <- NA
+    out$convergence <- NA
+    out$Z <- NA
+  }
+  else if(fit$convergence != 0){
+    warning("Non-convergence in Cond_extremes_graph")
+    out <- list()
+    out$par <- list(a = rep(NA, times = length(comps)),
+                    b = rep(NA, times = length(comps)),
+                    mu = rep(NA, times = length(comps)),
+                    Sigma = diag(NA, length(comps)))
+    out$value <- NA
+    out$convergence <- NA
+    out$Z <- NA
+  }
+  else if(nOptim > 1){
+    for(i in 2:nOptim){
+      par_start <- fit$par
+      par_start[which(par_start < 0)] <- 0.1
+      #par_start[which(par_start < 0)] <- mean(par_start[which(par_start > 0)])
+      fit <- try(optim(par = par_start, fn = Qpos, control = list(maxit = maxit),
+                       yex = yex, ydep = ydep,
+                       constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
+                 silent = TRUE)
+      if(inherits(fit, "try-error")){
+        warning("Error in optim call from Cond_extremes_graph")
+        out <- list()
+        out$par <- list(a = rep(NA, times = length(comps)),
+                        b = rep(NA, times = length(comps)),
+                        mu = rep(NA, times = length(comps)),
+                        Sigma = diag(NA, length(comps)))
+        out$value <- NA
+        out$convergence <- NA
+        out$Z <- NA
+        break
+      }
+      else if(fit$convergence != 0){
+        warning("Non-convergence in Cond_extremes_graph")
+        out <- list()
+        out$par <- list(a = rep(NA, times = length(comps)),
+                        b = rep(NA, times = length(comps)),
+                        mu = rep(NA, times = length(comps)),
+                        Sigma = diag(NA, length(comps)))
+        out$value <- NA
+        out$convergence <- NA
+        out$Z <- NA
+        break
+      }
+    }
+  }
+  #Get the output
+  if(!is.na(fit$par[1])){
+    ## Extract MLEs of alpha and beta
+    a_hat <- fit$par[1]
+    b_hat <- fit$par[2]
+    
+    ## Obtain the residuals
+    Z <- (ydep - yex*a_hat)/(yex^b_hat)
+    
+    ## Organise the output
+    out <- list()
+    out$par <- list(a = a_hat, b = b_hat, mu = mean(Z), Sigma = var(Z))
+    out$value <- fit$value
+    out$convergence <- fit$convergence
+    out$Z <- Z
+  }
+  return(out)
 }
 
 ################################################################################
@@ -2854,144 +2966,6 @@ qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
   }
   else{
     out <- list()
-  }
-  return(out)
-}
-
-qfun_HT <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
-  
-  #function for the optim to optimise over
-  Qpos <- function(param, yex, ydep, constrain, q, v, aLow){
-    ## Extract the starting parameters
-    a <- param[1]
-    b <- param[2]
-    
-    ## Get the residuals
-    a_yi <- yex*a
-    b_yi <- yex^b
-    Z <- (ydep - a_yi)/b_yi
-    
-    ## Obtain the mean and covariance matrix of the residuals
-    mu <- mean(Z)
-    sigma <- as.numeric(var(Z))
-    
-    ## Conditions on the parameters
-    Delta <- 10^40
-    delta <- 10^(-10)
-    if(any(a < aLow[1]) | any(a > 1 - delta) | any(b > 1 - delta)){
-      res <- Delta
-    }
-    else{
-      mu <- a_yi + mu*b_yi
-      sigma <- sigma*(b_yi^2)
-      res <- -sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
-    }
-    
-    if(is.infinite(res)){
-      if(res < 0) {
-        res <- -Delta
-      }
-      else{ 
-        res <- Delta
-      }
-      warning("Infinite value of Q in mexDependence")
-    }
-    
-    #Checks if the constraints are satisfied to reduce the parameter space
-    else if(constrain){ 
-      zpos <- quantile(ydep - yex, probs = q)
-      z <- quantile(Z, probs = q)
-      zneg <- quantile(ydep + yex, probs = q)
-      
-      constraints_sat <- texmex:::ConstraintsAreSatisfied(a, b, z, zpos, zneg, v)
-      
-      # constraints_sat <- sapply(pmap(.l = list(a = a, b = b, z1 = z, zpos1 = zpos, zneg1 = zneg),
-      #                                .f = function(a, b, z1, zpos1, zneg1){
-      #                                  pmap(.l = list(a = a, b = b, z = z1, zpos = zpos1, zneg = zneg1), 
-      #                                       .f = texmex:::ConstraintsAreSatisfied, v)}), function(x){all(x == TRUE)})
-      if(!all(constraints_sat)){
-        res <- Delta
-      }
-    }
-    res
-  }
-  
-  fit <- try(optim(par = start, fn = Qpos, control = list(maxit = maxit),
-                   yex = yex, ydep = ydep,
-                   constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
-             silent = TRUE)
-  if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
-    out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
-    out$value <- NA
-    out$convergence <- NA
-    out$Z <- NA
-  }
-  else if(fit$convergence != 0){
-    warning("Non-convergence in Cond_extremes_graph")
-    out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
-    out$value <- NA
-    out$convergence <- NA
-    out$Z <- NA
-  }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      par_start <- fit$par
-      par_start[which(par_start < 0)] <- 0.1
-      #par_start[which(par_start < 0)] <- mean(par_start[which(par_start > 0)])
-      fit <- try(optim(par = par_start, fn = Qpos, control = list(maxit = maxit),
-                       yex = yex, ydep = ydep,
-                       constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
-                 silent = TRUE)
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_extremes_graph")
-        out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- NA
-        break
-      }
-      else if(fit$convergence != 0){
-        warning("Non-convergence in Cond_extremes_graph")
-        out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- NA
-        break
-      }
-    }
-  }
-  #Get the output
-  if(!is.na(fit$par[1])){
-    ## Extract MLEs of alpha and beta
-    a_hat <- fit$par[1]
-    b_hat <- fit$par[2]
-    
-    ## Obtain the residuals
-    Z <- (ydep - yex*a_hat)/(yex^b_hat)
-    
-    ## Organise the output
-    out <- list()
-    out$par <- list(a = a_hat, b = b_hat, mu = mean(Z), Sigma = var(Z))
-    out$value <- fit$value
-    out$convergence <- fit$convergence
-    out$Z <- Z
   }
   return(out)
 }
