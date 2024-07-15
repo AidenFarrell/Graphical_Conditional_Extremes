@@ -13,15 +13,15 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
     d <- dim_data[2]
     n <- dim_data[1]
   }
-  dependent <- (1:d)[-cond]
   
-  ## check the conditioning random variable is valid
+  ## check the conditioning random variable is valid and get dependent random variable
   if(length(cond) > 1){
     stop("cond must be of length 1")
   }
   else if(cond%%1 != 0 | cond <= 0 | cond > d){
     stop("cond must be a single positie integer")
   }
+  dependent <- (1:d)[-cond]
   
   ## get the starting parameters
   if(missing(start)){
@@ -30,10 +30,10 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
   else if(!is.numeric(start)){
     stop("start must be a vector")
   }
-  else if(length(start) > 2){
-    stop("start must be a vector")
+  else if(length(start) != 2){
+    stop("start must be a vector of length 2")
   }
-  else if(any(abs(start)) > 1){
+  else if(any(abs(start) > 1)){
     stop("Initial starting values are outside the parameter sapce")
   }
   if(length(start) == 2){
@@ -69,6 +69,7 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
     out$loglike <- sum(sapply(res, function(x){-x$value}))
     out$convergence <- max(sapply(res, function(x){x$convergence}))
     out$Z <- do.call(cbind, lapply(res, function(x){x$Z}))
+    colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
   }
   else{
     #Graph is provided so we need to figure out the separators and the cliques
@@ -100,6 +101,7 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
       out$loglike <- -res$value
       out$convergence <- res$convergence
       out$Z <- res$Z
+      colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
     }
     else{
       ## if the graph is connected use the graphical model
@@ -128,6 +130,7 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
         out$loglike <- -res$value
         out$convergence <- res$convergence
         out$Z <- res$Z
+        colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
       }
       else{
         ## the graph is disconnected so we can treat the components as exactly independent
@@ -190,6 +193,7 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
         out$loglike <- sum(sapply(res_1, function(x){-x$value}))
         out$convergence <- max(sapply(res_1, function(x){x$convergence}))
         out$Z <- do.call(cbind, lapply(1:n_comps, function(i){res_1[[i]]$Z}))
+        colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
       }
     }
   }
