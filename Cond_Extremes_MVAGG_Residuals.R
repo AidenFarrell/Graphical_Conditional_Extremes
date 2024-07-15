@@ -536,24 +536,20 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_extremes_graph")
     out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
+    out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
     out$Z <- NA
+    return(out)
   }
   else if(fit$convergence != 0){
     warning("Non-convergence in Cond_extremes_graph")
     out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
+    out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
     out$Z <- NA
+    return(out)
   }
   else if(nOptim > 1){
     for(i in 2:nOptim){
@@ -561,137 +557,47 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
       par_start[which(par_start < 0)] <- 0.1
       #par_start[which(par_start < 0)] <- mean(par_start[which(par_start > 0)])
       fit <- try(optim(par = par_start, fn = Qpos, control = list(maxit = maxit),
-                       yex = yex, ydep = ydep,
+                       yex = yex, ydep = ydep, negative = TRUE,
                        constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
                  silent = TRUE)
       if(inherits(fit, "try-error")){
         warning("Error in optim call from Cond_extremes_graph")
         out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
+        out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
         out$convergence <- NA
         out$Z <- NA
-        break
+        return(out)
       }
       else if(fit$convergence != 0){
         warning("Non-convergence in Cond_extremes_graph")
         out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
+        out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
         out$convergence <- NA
         out$Z <- NA
-        break
+        return(out)
       }
     }
   }
   #Get the output
   if(!is.na(fit$par[1])){
     #Extract MLEs of alpha and beta
-    d <- ncol(ydep)
-    alpha_hat <- fit$par[1:d]
-    beta_hat <- fit$par[(d + 1):length(fit$par)]
+    alpha_hat <- fit$par[1]
+    beta_hat <- fit$par[2]
     
     #obtain the residuals
-    a_yi_hat <- sapply(alpha_hat, function(x){yex*x})
-    b_yi_hat <- sapply(beta_hat, function(x){yex^x})
+    a_yi_hat <- yex*alpha_hat
+    b_yi_hat <- yex^beta_hat
     Z <- (ydep - a_yi_hat)/b_yi_hat
     
     out <- list()
-    out$par <- list(a = alpha_hat, b = beta_hat, mu = apply(Z, 2, mean), Sigma = cov(Z))
+    out$par <- list(a = alpha_hat, b = beta_hat, mu = mean(Z), Sigma = as.numeric(var(Z)))
     out$value <- fit$value
     out$convergence <- fit$convergence
     out$Z <- Z
   }
   return(out)
-}
-
-#function for the profile log-likelihood
-ProfileLogLik_a_b_indep <- function(yex, ydep, a, b, constrain = TRUE, q, v = 10, aLow = -1){
-  
-  #get the residuals
-  a_yi <- sapply(a, function(x){yex*x})
-  b_yi <- sapply(b, function(x){yex^x})
-  Z <- (ydep - a_yi)/b_yi
-  
-  #get the mean and covariance matrix of the residuals
-  mu <- apply(Z, 2, mean)
-  sigma <- cov(Z)
-  
-  #get the negative log-likelihood for the given parameters
-  nllh <- negloglike_indep(yex, ydep, a_yi, b_yi, a, b, mu, sigma, constrain, q, v, aLow)
-  res <- list(profLik = nllh, mu = mu, sigma = sigma)
-  return(res)
-}
-
-negloglike_indep <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v, aLow){
-  
-  #conditions on the parameters
-  Delta <- 10^40
-  delta <- 10^(-10)
-  
-  if(any(is.na(m)) | any(is.nan(m))){
-    res <- Delta
-  }
-  else if(any(a < aLow[1]) | any(a > 1 - delta) | any(b > 1 - delta)){
-    res <- Delta
-  }
-  else if(any(is.nan(sig)) | any(is.infinite(sig))){
-    res <- Delta
-  }
-  else if(is.complex(sig) | any(diag(sig) <= 0) | any(eigen(sig)$values <= 0) | !isTRUE(all.equal(sig, t(sig)))){
-    res <- Delta
-  }
-  else{
-    if(length(a) == 1){
-      #get the mean and sd matrix of the 1-dimensional Gaussian
-      mu <- lapply(apply(a_yi + b_yi*m, 1, list), function(y){y[[1]]})
-      sigma <- apply(b_yi, 1, function(x){x*sig*x}, simplify = FALSE)
-      ydep_list <- sapply(ydep, list)
-    }
-    else{
-      #get the mean and covariance matrix of the d-dimensional Gaussian
-      mu <- lapply(apply(a_yi + t(apply(b_yi, 1, function(x){x*m})), 1, list), function(y){y[[1]]})
-      sigma <- apply(b_yi, 1, function(x){diag(x)%*%sig%*%diag(x)}, simplify = FALSE) 
-      ydep_list <- lapply(apply(ydep, 1, list), function(y){y[[1]]})
-    }
-    
-    #Calculate the log-likelihood
-    res <- pmap(.l = list(x = ydep_list, mean = mu, sigma = sigma),
-                .f = dmvnorm, log = TRUE) 
-    res <- -Reduce("+", res)
-    
-    #check the value is valid
-    if(is.infinite(res)){
-      if(res < 0) {
-        res <- -Delta
-      }
-      else{ 
-        res <- Delta
-      }
-      warning("Infinite value of Q in mexDependence")
-    }
-    #Checks if the constraints are satisfied to reduce the parameter space
-    else if(constrain){ 
-      zpos <- apply(ydep - yex, 2, quantile, probs = q, simplify = FALSE)
-      z <- apply((ydep - a_yi)/b_yi, 2, quantile, probs = q, simplify = FALSE)
-      zneg <- apply(ydep + yex, 2, quantile, probs = q, simplify = FALSE)
-      
-      constraints_sat <- sapply(pmap(.l = list(a = a, b = b, z1 = z, zpos1 = zpos, zneg1 = zneg),
-                                     .f = function(a, b, z1, zpos1, zneg1){
-                                       pmap(.l = list(a = a, b = b, z = z1, zpos = zpos1, zneg = zneg1), 
-                                            .f = texmex:::ConstraintsAreSatisfied, v)}), function(x){all(x == TRUE)})
-      if(!all(constraints_sat)){
-        res <- Delta
-      }
-    }
-  }
-  res
 }
 
 #Might be able to get rid of the comps argument
