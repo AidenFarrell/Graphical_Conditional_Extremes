@@ -889,144 +889,6 @@ negloglike_new <- function(yex, ydep, a_yi, b_yi, a, b, m, sig, constrain, q, v,
   res
 }
 
-qfun_HT <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
-  
-  #function for the optim to optimise over
-  Qpos <- function(param, yex, ydep, constrain, q, v, aLow){
-    ## Extract the starting parameters
-    a <- param[1]
-    b <- param[2]
-    
-    ## Get the residuals
-    a_yi <- yex*a
-    b_yi <- yex^b
-    Z <- (ydep - a_yi)/b_yi
-    
-    ## Obtain the mean and covariance matrix of the residuals
-    mu <- mean(Z)
-    sigma <- as.numeric(var(Z))
-    
-    ## Conditions on the parameters
-    Delta <- 10^40
-    delta <- 10^(-10)
-    if(any(a < aLow[1]) | any(a > 1 - delta) | any(b > 1 - delta)){
-      res <- Delta
-    }
-    else{
-      mu <- a_yi + mu*b_yi
-      sigma <- sigma*(b_yi^2)
-      res <- -sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
-    }
-    
-    if(is.infinite(res)){
-      if(res < 0) {
-        res <- -Delta
-      }
-      else{ 
-        res <- Delta
-      }
-      warning("Infinite value of Q in mexDependence")
-    }
-    
-    #Checks if the constraints are satisfied to reduce the parameter space
-    else if(constrain){ 
-      zpos <- quantile(ydep - yex, probs = q)
-      z <- quantile(Z, probs = q)
-      zneg <- quantile(ydep + yex, probs = q)
-      
-      constraints_sat <- texmex:::ConstraintsAreSatisfied(a, b, z, zpos, zneg, v)
-      
-      # constraints_sat <- sapply(pmap(.l = list(a = a, b = b, z1 = z, zpos1 = zpos, zneg1 = zneg),
-      #                                .f = function(a, b, z1, zpos1, zneg1){
-      #                                  pmap(.l = list(a = a, b = b, z = z1, zpos = zpos1, zneg = zneg1), 
-      #                                       .f = texmex:::ConstraintsAreSatisfied, v)}), function(x){all(x == TRUE)})
-      if(!all(constraints_sat)){
-        res <- Delta
-      }
-    }
-    res
-  }
-  
-  fit <- try(optim(par = start, fn = Qpos, control = list(maxit = maxit),
-                   yex = yex, ydep = ydep,
-                   constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
-             silent = TRUE)
-  if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
-    out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
-    out$value <- NA
-    out$convergence <- NA
-    out$Z <- NA
-  }
-  else if(fit$convergence != 0){
-    warning("Non-convergence in Cond_extremes_graph")
-    out <- list()
-    out$par <- list(a = rep(NA, times = length(comps)),
-                    b = rep(NA, times = length(comps)),
-                    mu = rep(NA, times = length(comps)),
-                    Sigma = diag(NA, length(comps)))
-    out$value <- NA
-    out$convergence <- NA
-    out$Z <- NA
-  }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      par_start <- fit$par
-      par_start[which(par_start < 0)] <- 0.1
-      #par_start[which(par_start < 0)] <- mean(par_start[which(par_start > 0)])
-      fit <- try(optim(par = par_start, fn = Qpos, control = list(maxit = maxit),
-                       yex = yex, ydep = ydep,
-                       constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
-                 silent = TRUE)
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_extremes_graph")
-        out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- NA
-        break
-      }
-      else if(fit$convergence != 0){
-        warning("Non-convergence in Cond_extremes_graph")
-        out <- list()
-        out$par <- list(a = rep(NA, times = length(comps)),
-                        b = rep(NA, times = length(comps)),
-                        mu = rep(NA, times = length(comps)),
-                        Sigma = diag(NA, length(comps)))
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- NA
-        break
-      }
-    }
-  }
-  #Get the output
-  if(!is.na(fit$par[1])){
-    ## Extract MLEs of alpha and beta
-    a_hat <- fit$par[1]
-    b_hat <- fit$par[2]
-    
-    ## Obtain the residuals
-    Z <- (ydep - yex*a_hat)/(yex^b_hat)
-    
-    ## Organise the output
-    out <- list()
-    out$par <- list(a = a_hat, b = b_hat, mu = mean(Z), Sigma = var(Z))
-    out$value <- fit$value
-    out$convergence <- fit$convergence
-    out$Z <- Z
-  }
-  return(out)
-}
-
 ################################################################################
 ## Conditional extremes model assuming the residuals follow a (multivariate) asymmetric generalised Gaussian distribution
 Cond_extremes_MVAGGD <- function(data, cond, graph = NA, start,
@@ -3033,9 +2895,9 @@ Cond_extremes_MVAGGD_Gamma_TS_new <- function(data, cond, graph = NA, start,
   ydep <- as.matrix(data[,-cond])
   
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_HT(yex = yex, ydep = as.matrix(ydep[,i]),
-            constrain = constrain, aLow = aLow, q = q, v = v,
-            maxit = maxit, start = start[i,1:2], nOptim = nOptim)})
+    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+               constrain = constrain, aLow = aLow, q = q, v = v,
+               maxit = maxit, start = start[i,1:2], nOptim = nOptim)})
   
   ## Get the necessary output
   z <- sapply(res_OG, function(x){x$Z})
@@ -3218,7 +3080,7 @@ Cond_extremes_MVAGGD_Gamma_TS_decomp <- function(data, cond, graph = NA, start,
   yex <- as.matrix(data[,cond])
   ydep <- as.matrix(data[,-cond])
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_HT(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start[i,1:2], nOptim = nOptim)})
   
@@ -3997,7 +3859,7 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
   res <- list()
   if(is_empty(seps) & n_cliques == d-1){
     res_1 <- lapply(cliques, function(i){
-      qfun_HT(yex = yex, ydep = as.matrix(ydep[,i]), 
+      qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
               constrain = constrain, q = q, v = v, aLow = aLow,
               maxit = maxit, start = start[i,], nOptim = nOptim)}) 
     
@@ -4368,7 +4230,7 @@ Cond_extremes_MVN_TS <- function(data, cond, graph = NA, start = c(0.1, 0.1),
   ydep <- as.matrix(data[,-cond])
   
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_HT(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start[i,], nOptim = nOptim)})
   
@@ -5682,7 +5544,7 @@ Cond_extremes_MVAGGD_Three_step <- function(data, cond = 1, graph = NA,
   ydep <- as.matrix(data[,-cond])
   
   fit_HT <- lapply(1:(d-1), function(i){
-    qfun_HT(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start_HT, nOptim = nOptim)})
   
