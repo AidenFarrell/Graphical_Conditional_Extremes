@@ -7,6 +7,7 @@
 dagg <- function(x, loc, scale_1, scale_2, shape, log = FALSE){
   
   ## checks
+  if(!is.vector(x)){stop("x must be a vector")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
   }
@@ -31,6 +32,7 @@ dagg <- function(x, loc, scale_1, scale_2, shape, log = FALSE){
 pagg <- function(q, loc, scale_1, scale_2, shape, log = FALSE){
   
   ## checks
+  if(!is.vector(q)){stop("q must be a vector")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
   }
@@ -54,12 +56,8 @@ pagg <- function(q, loc, scale_1, scale_2, shape, log = FALSE){
 
 ## Qunatile function
 qagg <- function(p, loc, scale_1, scale_2, shape){
-  if(!is.null(dim(p))){
-    stop("q must be a vector")
-  }
-  if(any(p < 0) | any(p > 1)){
-    stop("p must be in the region [0,1]")
-  }
+  if(!is.vector(p)){stop("p must be a vector")}
+  if(any(p < 0) | any(p > 1)){stop("p must be in the region [0,1]")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
   }
@@ -78,40 +76,43 @@ ragg <- function(n, loc, scale_1, scale_2, shape){
   if(length(n) > 1 | n%%1 != 0){
     stop("n must be a single positive integer")
   }
-  if(any(scale_1 <= 0) | any(scale_2 <= 0)){
+  if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale must be a positive real number")
   }
   
   p <- runif(n)
-  z <- qaggd(p, loc, scale_1, scale_2, shape)
+  z <- qagg(p, loc, scale_1, scale_2, shape)
   return(z)
 }
 
 ## log-likelihood for the model
 llh_agg <- function(x, par, negative = FALSE){
   
+  ## extract parameter estimates
   loc <- par[1]
   scale_1 <- par[2]
   scale_2 <- par[3]
   shape <- par[4]
   
+  ## check parameters
   if(scale_1 <= 0 | scale_2 <= 0 | shape <= 0){
     return((-10^10)*(-1)^negative)
   }
   else{
+    ## calculate log-likelihood
     z <- sum(dagg(x, loc, scale_1, scale_2, shape, log = TRUE))
     return(z*(-1)^negative)
   }
 }
 
 ## Fit the log-likelihood for the model using optim
-fit_aggd <- function(par, data){
+fit_agg <- function(par, data){
   ## checks
   if(!is.vector(data)){stop("data must be a vector")}
   if(length(par) != 4){stop("invalid number of parameters")}
   
   ## Fit the model
-  fit <- optim(par = par, fn = llh_aggd, x = data, negative = TRUE,
+  fit <- optim(par = par, fn = llh_agg, x = data, negative = TRUE,
                control = list(maxit = 1e+9), method = "Nelder-Mead")
   
   ## Extract the output
@@ -130,11 +131,15 @@ fit_aggd <- function(par, data){
 
 ## Probability density function
 dmvagg <- function(data, loc, scale_1, scale_2, shape, log = FALSE){
+  
+  ## check data is in correct format
   if(!is.matrix(data)){stop("data must be a matrix")}
+  
   #extract info from data
   n <- dim(data)[1]
   d <- dim(data)[2]
   
+  ## checks on the inputs
   if(length(loc) != d | length(scale_1) != d | length(scale_2) != d | length(shape) != d){
     stop("parameters need to have the same dimension of data")
   }
@@ -142,6 +147,7 @@ dmvagg <- function(data, loc, scale_1, scale_2, shape, log = FALSE){
     stop("Invalid parameters provided")
   }
   else{
+    ## calculate the density
     l_f_z <- sapply(1:d, function(i){daggd(x = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i], log = TRUE)})
     
     Q_F_z <- sapply(1:d, function(i){qnorm(paggd(q = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i]))})
