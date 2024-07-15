@@ -93,7 +93,7 @@ semiparametric_unif_transform <- function(data, u, scale, shape){
   z1 <- rank(data)/(n + 1)
   z[-index] <- z1[-index]
   
-  #get above the threhsold
+  #get above the threshold
   pu <- length(index)/n
   if(abs(shape) < 1e-6){
     z2 <- 1 - pu*exp(-exp(-(data - u)/scale))
@@ -105,6 +105,7 @@ semiparametric_unif_transform <- function(data, u, scale, shape){
   return(z)
 }
 
+#Coles and Tawn (1991) semi-parametric approach for transformation to gpd margins
 semiparametric_gpd_transform <- function(p, u_unif, gpd_par, distFun){
   
   # extract MLEs
@@ -339,7 +340,8 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
 }
 
 ################################################################################
-## Above but with the profile log-likelihood using cliques and separators
+## Functions to fit the conditional extremes model using a MVN distribution for the
+## residuals and using a graphical structure
 Cond_extremes_graph <- function(data, cond = 1, graph = NA, 
                                 constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
                                 maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
@@ -396,19 +398,15 @@ Cond_extremes_graph <- function(data, cond = 1, graph = NA,
     
     #get the output
     out <- list()
-    out$par$a <- matrix(do.call(c, lapply(res, function(x){x$par$a})), nrow = 1)
-    out$par$b <- matrix(do.call(c, lapply(res, function(x){x$par$b})), nrow = 1)
-    out$par$mu <- matrix(do.call(c, lapply(res, function(x){x$par$mu})), nrow = 1)
     
-    Sigma_out <- matrix(0, ncol = d-1, nrow = d-1)
-    for(i in 1:length(cliques)){
-      Sigma_elements <- permutations(n = length(cliques[[i]]), r = 2, v = cliques[[i]], repeats.allowed = TRUE)
-      Sigma_out[Sigma_elements] <-  res[[i]]$par$Sigma
-    }
-    out$par$Sigma <- Sigma_out
+    out$par$main <- matrix(data = c(do.call(c, lapply(res, function(x){x$par$a})),
+                                    do.call(c, lapply(res, function(x){x$par$b})),
+                                    do.call(c, lapply(res, function(x){x$par$mu}))),
+                           nrow = 3, ncol = d-1, byrow = TRUE)
+    rownames(out$par$main) <- c("a", "b", "mu")
+    colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
     
-    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
-      sapply(dependent, function(x){paste0("Column", x)})
+    out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = 1/sapply(res, function(x){x$par$Sigma}))
     
     out$loglike <- sapply(res, function(x){-x$value})
     out$convergence <- sapply(res, function(x){x$convergence})
@@ -441,63 +439,98 @@ Cond_extremes_graph <- function(data, cond = 1, graph = NA,
     
     cliques <- lapply(cliques, function(x){sort(x)})
     seps <- lapply(seps, function(x){sort(x)})
+    
+    #fit the profile log-likelihood
+    if(is_empty(seps)){
+      res <- lapply(cliques, function(x){
+        qfun(yex = yex, ydep = as.matrix(ydep[,x]), 
+             constrain = constrain, aLow = aLow, q = q, v = v,
+             maxit = maxit, start = start[x,], nOptim = nOptim)}) 
+      
+      return(out)
+    }
+    else{
+      Sigma_zero <- matrix(0, d-1, d-1)
+      Sig_non_zero <- upper.tri(Sigma_zero, diag = TRUE)
+      # Sig_non_zero <- as_edgelist(graph_cond)
+      # Sig_non_zero <- rbind(Sig_non_zero, 
+      #                       matrix(rep(1:(d-1), 2), ncol = 2))
+      
+      res <- qfun_new(yex = yex, ydep = as.matrix(ydep), comps = 1:(d-1), 
+                      constrain = constrain, aLow = aLow, q = q, v = v,
+                      cliques = cliques, seps = seps, Sig_non_zero = Sig_non_zero,
+                      maxit = maxit, start = start, nOptim = nOptim) 
+      
+      #get the output
+      out <- list()
+      out$par$a <- matrix(res$par$a, nrow = 1)
+      out$par$b <- matrix(res$par$b, nrow = 1)
+      out$par$mu <- matrix(res$par$mu, nrow = 1)
+      out$par$Sigma <- matrix(res$par$Sigma, nrow = d - length(cond), ncol = d-length(cond))
+      
+      colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
+        sapply(dependent, function(x){paste0("Column", x)})
+      
+      out$loglike <- -res$value
+      out$convergence <- res$convergence
+      out$Z <- res$Z
+    }
   }
-  
-  #fit the profile log-likelihood
-  if(is_empty(seps)){
-    res <- lapply(cliques, function(x){
-      qfun(yex = yex, ydep = as.matrix(ydep[,x]), 
-           constrain = constrain, aLow = aLow, q = q, v = v,
-           maxit = maxit, start = start[x,], nOptim = nOptim)}) 
-    
-    return(out)
-  }
-  else{
-    Sigma_zero <- matrix(0, d-1, d-1)
-    Sig_non_zero <- upper.tri(Sigma_zero, diag = TRUE)
-    # Sig_non_zero <- as_edgelist(graph_cond)
-    # Sig_non_zero <- rbind(Sig_non_zero, 
-    #                       matrix(rep(1:(d-1), 2), ncol = 2))
-    
-    res <- qfun_new(yex = yex, ydep = as.matrix(ydep), comps = 1:(d-1), 
-                    constrain = constrain, aLow = aLow, q = q, v = v,
-                    cliques = cliques, seps = seps, Sig_non_zero = Sig_non_zero,
-                    maxit = maxit, start = start, nOptim = nOptim) 
-    
-    #get the output
-    out <- list()
-    out$par$a <- matrix(res$par$a, nrow = 1)
-    out$par$b <- matrix(res$par$b, nrow = 1)
-    out$par$mu <- matrix(res$par$mu, nrow = 1)
-    out$par$Sigma <- matrix(res$par$Sigma, nrow = d - length(cond), ncol = d-length(cond))
-    
-    colnames(out$par$a) <- colnames(out$par$b) <- colnames(out$par$mu) <-
-      sapply(dependent, function(x){paste0("Column", x)})
-    
-    out$loglike <- -res$value
-    out$convergence <- res$convergence
-    out$Z <- res$Z
-    
-    return(out)
-  }
+  ## Set class of the output and return the output
+  class(out) <- "Cond_extremes_MVN"
+  return(out)
 }
 
 qfun_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
   
   #function for the optim to optimise over
-  Qpos <- function(param, yex, ydep, constrain, q, v, aLow){
+  Qpos <- function(param, yex, ydep, constrain, q, v, aLow, negative = FALSE){
+    
     #get the starting parameters
-    d <- ncol(ydep)
-    a <- param[1:d]
-    b <- param[(d + 1):length(param)]
+    a <- param[1]
+    b <- param[2]
+    
+    ## check alpha and beta parameters
+    if(a < aLow | abs(a) > 1 | b > 1){
+      return((-10^10)*(-1)^negative)
+    }
+    
+    #get the residuals
+    a_yi <- a*yex
+    b_yi <- yex^b
+    Z <- (ydep - a_yi)/b_yi
+    
+    #get the mean and covariance matrix of the residuals
+    mu_Z <- mean(Z)
+    sigma_Z <- as.numeric(var(Z))
+    
+    ## Fit the profile log-likelihood
+    mu <- a_yi + b_yi*mu_Z
+    sigma <- sigma_Z*(b_yi^2)
+    res <- sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
+      
+    #check the value is valid
+    if(is.infinite(res)){
+      return((-10^10)*(-1)^negative)
+      warning("Infinite value of Q in mexDependence")
+    }
+    #Checks if the constraints are satisfied to reduce the parameter space
+    else if(constrain){ 
+      zpos <- quantile(ydep - yex, probs = q)
+      z <- quantile(Z, probs = q)
+      zneg <- quantile(ydep + yex, probs = q)
+      constraints_sat <- texmex:::ConstraintsAreSatisfied(a = a, b = b, z = z, zpos = zpos, zneg = zneg, v = v)
+      if(!all(constraints_sat)){
+        return((-10^10)*(-1)^negative)
+      }
+    }
     
     #get the value of the profile log_likelihood for fixed a and b
-    res <- ProfileLogLik_a_b_indep(yex, ydep, a, b, constrain, q, v, aLow)
-    res$profLik
+    return(res*(-1)^negative)
   }
   
   fit <- try(optim(par = start, fn = Qpos, control = list(maxit = maxit),
-                   yex = yex, ydep = ydep,
+                   yex = yex, ydep = ydep, negative = TRUE,
                    constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
              silent = TRUE)
   if(inherits(fit, "try-error")){
