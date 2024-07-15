@@ -392,7 +392,7 @@ Cond_extremes_graph <- function(data, cond = 1, graph = NA,
     
     ## Fit the model
     res <- lapply(1:(d-1), function(i){
-      qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
+      qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
                  constrain = constrain, aLow = aLow, q = q, v = v,
                  maxit = maxit, start = start[i,], nOptim = nOptim)})
     
@@ -481,7 +481,7 @@ Cond_extremes_graph <- function(data, cond = 1, graph = NA,
   return(out)
 }
 
-qfun_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
+qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOptim){
   
   #function for the optim to optimise over
   Qpos <- function(param, yex, ydep, constrain, q, v, aLow, negative = FALSE){
@@ -2895,7 +2895,7 @@ Cond_extremes_MVAGGD_Gamma_TS_new <- function(data, cond, graph = NA, start,
   ydep <- as.matrix(data[,-cond])
   
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
                constrain = constrain, aLow = aLow, q = q, v = v,
                maxit = maxit, start = start[i,1:2], nOptim = nOptim)})
   
@@ -3080,7 +3080,7 @@ Cond_extremes_MVAGGD_Gamma_TS_decomp <- function(data, cond, graph = NA, start,
   yex <- as.matrix(data[,cond])
   ydep <- as.matrix(data[,-cond])
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start[i,1:2], nOptim = nOptim)})
   
@@ -3859,7 +3859,7 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
   res <- list()
   if(is_empty(seps) & n_cliques == d-1){
     res_1 <- lapply(cliques, function(i){
-      qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
+      qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]), 
               constrain = constrain, q = q, v = v, aLow = aLow,
               maxit = maxit, start = start[i,], nOptim = nOptim)}) 
     
@@ -4230,7 +4230,7 @@ Cond_extremes_MVN_TS <- function(data, cond, graph = NA, start = c(0.1, 0.1),
   ydep <- as.matrix(data[,-cond])
   
   res_OG <- lapply(1:(d-1), function(i){
-    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start[i,], nOptim = nOptim)})
   
@@ -5544,7 +5544,7 @@ Cond_extremes_MVAGGD_Three_step <- function(data, cond = 1, graph = NA,
   ydep <- as.matrix(data[,-cond])
   
   fit_HT <- lapply(1:(d-1), function(i){
-    qfun_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+    qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
             constrain = constrain, aLow = aLow, q = q, v = v,
             maxit = maxit, start = start_HT, nOptim = nOptim)})
   
