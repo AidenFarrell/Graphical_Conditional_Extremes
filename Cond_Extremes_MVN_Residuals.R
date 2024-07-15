@@ -66,8 +66,8 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
     
     out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = sapply(res, function(x){x$par$Gamma}))
     
-    out$loglike <- sapply(res, function(x){-x$value})
-    out$convergence <- sapply(res, function(x){x$convergence})
+    out$loglike <- sum(sapply(res, function(x){-x$value}))
+    out$convergence <- max(sapply(res, function(x){x$convergence}))
     out$Z <- do.call(cbind, lapply(res, function(x){x$Z}))
   }
   else{
@@ -130,7 +130,7 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
         out$Z <- res$Z
       }
       else{
-        ## the graph is disconnected so we can treat the components as exactly indepndent
+        ## the graph is disconnected so we can treat the components as exactly independent
         ## extract the components
         comps <- components(graph_cond)
         n_comps <- comps$no
@@ -138,35 +138,42 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
         g_comps <- lapply(v_comps, function(i){subgraph(graph_cond, i)})
         res_1 <- list()
         for(i in 1:n_comps){
-          ## determine if the comonent is a full graph or not
+          ## determine if the component is a full graph or not
           n_vertices <- length(V(g_comps[[i]]))
-          all_edges_comp <- as.data.frame(combinations(n = n_vertices, r = 2, v = 1:n_vertices))
-          g_edges_comp <- as.data.frame(as_edgelist(g_comps[[i]]))
-          ## fit saturated model to this component
-          if(nrow(all_edges_comp) == nrow(g_edges_comp)){
-            res_1[[i]] <- qfun_MVN_full(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]),
-                                        maxit = maxit, 
-                                        start = c(start[v_comps[[i]],]), 
-                                        nOptim = nOptim)
+          if(n_vertices == 1){
+            res_1[[i]] <- qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]), 
+                                         constrain = TRUE, aLow = aLow, q = q, v = v,
+                                         maxit = maxit, start = c(start[v_comps[[i]],]), nOptim = nOptim)
           }
           else{
-            ## fit graphical model to this component
-            all_edges_comp$exists <- do.call(paste0, all_edges_comp) %in% do.call(paste0, g_edges_comp)
-            non_edges_comp <- as.matrix(all_edges_comp[which(all_edges_comp$exists == FALSE), 1:2])
-            res_1[[i]] <- qfun_MVN_graph(yex = yex, ydep = ydep[,v_comps[[i]]], 
-                                         Gamma_zero = non_edges_comp,
-                                         maxit = maxit, 
-                                         start = c(start[v_comps[[i]],]), 
-                                         nOptim = nOptim)
+            all_edges_comp <- as.data.frame(combinations(n = n_vertices, r = 2, v = 1:n_vertices))
+            g_edges_comp <- as.data.frame(as_edgelist(g_comps[[i]]))
+            ## fit saturated model to this component
+            if(nrow(all_edges_comp) == nrow(g_edges_comp)){
+              res_1[[i]] <- qfun_MVN_full(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]),
+                                          maxit = maxit, 
+                                          start = c(start[v_comps[[i]],]), 
+                                          nOptim = nOptim)
+            }
+            else{
+              ## fit graphical model to this component
+              all_edges_comp$exists <- do.call(paste0, all_edges_comp) %in% do.call(paste0, g_edges_comp)
+              non_edges_comp <- as.matrix(all_edges_comp[which(all_edges_comp$exists == FALSE), 1:2])
+              res_1[[i]] <- qfun_MVN_graph(yex = yex, ydep = ydep[,v_comps[[i]]], 
+                                           Gamma_zero = non_edges_comp,
+                                           maxit = maxit, 
+                                           start = c(start[v_comps[[i]],]), 
+                                           nOptim = nOptim)
+            } 
           }
         }
         
         #get the output
         out <- list()
         
-        out$par$main <- matrix(data = c(sapply(res_1, function(x){unname(x$par$a)}), 
-                                        sapply(res_1, function(x){unname(x$par$b)}),
-                                        sapply(res_1, function(x){unname(x$par$mu)})),
+        out$par$main <- matrix(data = c(do.call(c, lapply(res_1, function(x){unname(x$par$a)})), 
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$b)})),
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$mu)}))),
                                nrow = 3, ncol = d-1, byrow = TRUE)
         rownames(out$par$main) <- c("a", "b", "mu")
         colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
@@ -180,8 +187,8 @@ Cond_extremes_graph_new <- function(data, cond, graph = NA,
         non_zero_elements <- which(Gamma_intrim*lower_tri_elements != 0, arr.ind = TRUE)
         out$par$Gamma <- sparseMatrix(i = non_zero_elements[,1], j = non_zero_elements[,2], x = c(Gamma_intrim[non_zero_elements]), symmetric = TRUE)
         
-        out$loglike <- sapply(res_1, function(x){-x$value})
-        out$convergence <- sapply(res_1, function(x){x$convergence})
+        out$loglike <- sum(sapply(res_1, function(x){-x$value}))
+        out$convergence <- max(sapply(res_1, function(x){x$convergence}))
         out$Z <- do.call(cbind, lapply(1:n_comps, function(i){res_1[[i]]$Z}))
       }
     }
