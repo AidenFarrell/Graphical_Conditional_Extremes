@@ -71,7 +71,7 @@ Cond_extremes_graph <- function(data, cond, graph = NA,
       out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(NA, d-1)) 
     }
     else{
-      out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(1, d-1))
+      out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = sapply(res, function(x){x$par$Gamma}))
     }
     
     out$loglike <- sum(sapply(res, function(x){-x$value}))
