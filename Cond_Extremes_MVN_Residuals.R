@@ -1,8 +1,8 @@
 ## Functions to fit the CMEVM when we assume that the residuals are multivariate Gaussian
 ## with some graphical structure
-Cond_extremes_graph <- function(data, cond, graph = NA, 
-                                constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
-                                maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
+Cond_extremes_MVN <- function(data, cond, graph = NA, 
+                              constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
+                              maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
   
   #get information from the data
   dim_data <- dim(data)
