@@ -5,9 +5,9 @@ source("~/PhD/Project_2/Graphical_Conditional_Extremes/MVAGG_Functions.R")
 ################################################################################
 
 ## Conditional extremes model under the one-step approach assuming the residuals
-## follow a mutltivariate asymmetric generalised Gaussian distribution
-Cond_extremes_MVAGGD <- function(data, cond, graph = NA, start,
-                                 maxit = 1e+6, nOptim = 1){
+## follow a multivariate asymmetric generalised Gaussian distribution
+Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
+                                maxit = 1e+6, nOptim = 1){
   
   #get information from the data
   dim_data <- dim(data)
@@ -49,16 +49,16 @@ Cond_extremes_MVAGGD <- function(data, cond, graph = NA, start,
   yex <- as.matrix(data[,cond])
   ydep <- as.matrix(data[,-cond])
   
-  #determine the components in the model
+  ## Determine the components in the model
   if(!is_igraph(graph)){
     warning("\nNo graphical structure has been provided.\n \nWe assume the residuals are IID Guassian random variables.")
     
-    ## Fit the model
+    ## Fit the independence model
     res <- lapply(1:(d-1), function(i){
-      qfun_MVAGGD_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+      qfun_MVAGG_indep(yex = yex, ydep = as.matrix(ydep[,i]),
                         maxit = maxit, start = start[i,])})
     
-    ## 
+    ## Extract the output
     out <- list()
     
     out$par$main <- matrix(data = c(do.call(c, lapply(res, function(x){x$par$a})),
@@ -68,172 +68,164 @@ Cond_extremes_MVAGGD <- function(data, cond, graph = NA, start,
                                     do.call(c, lapply(res, function(x){x$par$scale_2})),
                                     do.call(c, lapply(res, function(x){x$par$shape}))),
                            nrow = 6, ncol = d-1, byrow = TRUE)
+    if(any(is.na(out$par$main))){
+      out$par$main <- matrix(NA, nrow = 6, ncol = d-1)
+    }
     rownames(out$par$main) <- c("a", "b", "loc", "scale_1", "scale_2", "shape")
     colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
     
-    out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(1, d-1))
+    if(any(is.na(out$par$main))){
+      out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(NA, d-1)) 
+    }
+    else{
+      out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(1, d-1))
+    }
     
     out$loglike <- sum(sapply(res, function(x){-x$value}))
     out$convergence <- max(sapply(res, function(x){x$convergence}))
     out$Z <- do.call(cbind, lapply(res, function(x){x$Z}))
+    if(any(is.na(out$Z))){
+      out$Z <- matrix(NA, nrow = nrow(out$Z), ncol = ncol(out$Z)) 
+    }
     colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
-    
-    class(out) <- "Cond_extremes_MVAGG"
-    return(out)
   }
   else{
-    #Graph is provided so we need to figure out the separators and the cliques
-    
-    #determine if removing a single nodes results in more than one component
-    #If it does it is a separator and we need to include single separators
-    graphs_ind <- lapply(1:d, delete_vertices, graph = graph)
-    comps_ind <- lapply(graphs_ind, components)
-    comps_ind_unique <- sapply(comps_ind, function(x){length(unique(x$membership))})
-    if(any(comps_ind_unique != 1)){
-      inc_sings <- TRUE
-    }
-    else{
-      inc_sings <- FALSE
-    }
-    
-    ## Now figure out the cliques and separators
+    ## Graph is provided so we need to determine its structure
     graph_cond <- delete_vertices(graph, cond)
-    comps <- components(graph_cond)
     
-    if(comps$no != 1){
-      ## Get the separate components
-      v_comps <- groups(comps)
-      g_comps <- lapply(v_comps, function(i){subgraph(graph_cond, i)})
+    ## check if the graph is full, if so fit then model instantly
+    all_edges <- as.data.frame(combinations(n = d-1, r = 2, v = 1:(d-1)))
+    g_edges <- as.data.frame(as_edgelist(graph_cond))
+    n_edges_full <- nrow(all_edges)
+    n_edges_graph_cond <- nrow(g_edges)
+    
+    if(n_edges_full == n_edges_graph_cond){
+      ## Fit the saturated model
+      res <- qfun_MVAGG_full(yex = yex, ydep = ydep, maxit = maxit, start = c(start))
       
-      ## Get the non_edges in the graph(s)
-      non_edges <- vector("list", comps$no)
-      for(i in 1:comps$no){
-        if(length(V(g_comps[[i]])) <= 2){
-          non_edges[[i]] <- matrix(NA, nrow = 0, ncol = 2)
-        }
-        else{
-          all_edges <- data.frame(combinations(n = length(V(g_comps[[i]])), r = 2, v = V(g_comps[[i]])))
-          edges_in_comp <- data.frame(as_edgelist(g_comps[[i]]))
-          all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, edges_in_comp)
-          non_edges[[i]] <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
-        }
-      }
+      ## Extract the output
+      out <- list()
       
-      ## Get the cliques and separators
-      for(i in 1:comps$no){
-        V(g_comps[[i]])$name <- v_comps[[i]]
-      }
-      cliques <- lapply(g_comps, function(x){max_cliques(x)})
-      seps <- lapply(cliques, function(x){get_separators(x, includeSingletons = inc_sings)})
+      out$par$main <- matrix(data = c(res$par$a, res$par$b, res$par$loc,
+                                      res$par$scale_1, res$par$scale_2, res$par$shape),
+                             nrow = 6, ncol = d-1, byrow = TRUE)
+      rownames(out$par$main) <- c("a", "b", "loc", "scale_1", "scale_2", "shape")
+      colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
       
+      out$par$Gamma <- as(res$par$Gamma, "sparseMatrix")
+      
+      out$loglike <- -res$value
+      out$convergence <- res$convergence
+      out$Z <- res$Z
+      colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
     }
     else{
-      #get the cliques and the separators in the graph
-      cliques <- max_cliques(graph_cond)
-      #now get the separators but we only include singletons a vertex only appears once in a clique of length two
-      seps <- get_separators(cliques, includeSingletons = inc_sings)
-      
-      ## Get the non_edges in the graph
-      all_edges <- data.frame(combinations(n = d - 1, r = 2, v = 1:(d-1)))
-      edges_in_graph <- data.frame(as_edgelist(graph_cond))
-      all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, edges_in_graph)
-      non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
-    }
-  }
-  
-  #separate data into the conditioning and unconditioned random variables
-  yex <- as.matrix(data[,cond])
-  ydep <- as.matrix(data[,-cond])
-  
-  ## fit the models and get the output
-  if(is_empty(seps) & length(cliques) == d-1){
-    ## Make this function and do them independently of one another
-    res_1 <- lapply(1:(d-1), function(i){
-      qfun_MVAGGD_Gamma_indep(yex = yex, ydep = as.matrix(ydep[,i]),
-                              maxit = maxit, start = c(start[i,]), nOptim = nOptim)})
-    
-    res <- list()
-    res$par$a <- do.call(c, lapply(res_1, function(x){x$par$a}))
-    res$par$b <- do.call(c, lapply(res_1, function(x){x$par$b}))
-    res$par$mu <- do.call(c, lapply(res_1, function(x){x$par$mu}))
-    res$par$sigma_1 <- do.call(c, lapply(res_1, function(x){x$par$sigma_1}))
-    res$par$sigma_2 <- do.call(c, lapply(res_1, function(x){x$par$sigma_2}))
-    res$par$shape <- do.call(c, lapply(res_1, function(x){x$par$shape}))
-    res$par$Gamma <- diag(1, d-1)
-    res$value <- sapply(res_1, function(x){x$value})
-    res$convergence <- sapply(res_1, function(x){x$convergence})
-    res$Z <- do.call(cbind, lapply(res_1, function(x){x$Z}))
-  }
-  else if(is_empty(seps) & length(cliques) == 1){
-    res <- qfun_MVAGGD_Gamma_full(yex = yex, ydep = as.matrix(ydep), 
-                                  maxit = maxit, start = c(start), nOptim = nOptim)
-  }
-  else if(!is_connected(graph_cond)){
-    res_1 <- vector("list", comps$no)
-    for(i in 1:comps$no){
-      if(is_empty(seps[[i]])){
-        res_1[[i]] <- qfun_MVAGGD_Gamma_full(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]),
-                                             maxit = maxit, start = c(start[v_comps[[i]],]), nOptim = nOptim)
+      if(is_connected(graph_cond)){
+        ## If the graph is connected use the graphical model
+        ## determine the edges in the conditional graph
+        all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
+        non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
+        
+        ## Fit the graphical model
+        res <- qfun_MVAGG_graph(yex = yex, ydep = ydep, Gamma_zero = non_edges,
+                                maxit = maxit, start = c(start))
+        
+        ## Extract the output
+        out <- list()
+        
+        out$par$main <- matrix(data = c(res$par$a, res$par$b, res$par$loc,
+                                        res$par$scale_1, res$par$scale_2, res$par$shape),
+                               nrow = 6, ncol = d-1, byrow = TRUE)
+        rownames(out$par$main) <- c("a", "b", "loc", "scale_1", "scale_2", "shape")
+        colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
+        
+        out$par$Gamma <- as(res$par$Gamma, "sparseMatrix")
+        
+        out$loglike <- -res$value
+        out$convergence <- res$convergence
+        out$Z <- res$Z
+        colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
       }
       else{
-        res_1[[i]] <- qfun_MVAGGD_Gamma_graph(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]), Gamma_zero = non_edges[[i]],
-                                              maxit = maxit, start = c(start[v_comps[[i]],]), nOptim = nOptim)
+        ## The graph is disconnected so we can treat each components as
+        ## exactly independent
+        comps <- components(graph_cond)
+        n_comps <- comps$no
+        v_comps <- groups(comps)
+        g_comps <- lapply(v_comps, function(i){subgraph(graph_cond, i)})
+        res_1 <- list()
+        for(i in 1:n_comps){
+          ## determine if the component is a full graph or not
+          n_vertices <- length(V(g_comps[[i]]))
+          if(n_vertices == 1){
+            ## Fit independence model to this component
+            res_1[[i]] <- qfun_MVAGG_indep(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]), 
+                                           maxit = maxit, start = c(start[v_comps[[i]],]))
+          }
+          else{
+            all_edges_comp <- as.data.frame(combinations(n = n_vertices, r = 2, v = 1:n_vertices))
+            g_edges_comp <- as.data.frame(as_edgelist(g_comps[[i]]))
+            ## Fit saturated model to this component
+            if(nrow(all_edges_comp) == nrow(g_edges_comp)){
+              res_1[[i]] <- qfun_MVAGG_full(yex = yex, ydep = as.matrix(ydep[,v_comps[[i]]]),
+                                            maxit = maxit, start = c(start[v_comps[[i]],]))
+            }
+            else{
+              ## Fit graphical model to this component
+              all_edges_comp$exists <- do.call(paste0, all_edges_comp) %in% do.call(paste0, g_edges_comp)
+              non_edges_comp <- as.matrix(all_edges_comp[which(all_edges_comp$exists == FALSE), 1:2])
+              res_1[[i]] <- qfun_MVAGG_graph(yex = yex, ydep = ydep[,v_comps[[i]]], 
+                                           Gamma_zero = non_edges_comp,
+                                           maxit = maxit, 
+                                           start = c(start[v_comps[[i]],]))
+            } 
+          }
+        }
+        
+        ## Extract the output
+        out <- list()
+        
+        out$par$main <- matrix(data = c(do.call(c, lapply(res_1, function(x){unname(x$par$a)})), 
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$b)})),
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$loc)})),
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$scale_1)})),
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$scale_2)})),
+                                        do.call(c, lapply(res_1, function(x){unname(x$par$shape)}))),
+                               nrow = 6, ncol = d-1, byrow = TRUE)
+        if(any(is.na(out$par$main))){
+          out$par$main <- matrix(NA, nrow = 6, ncol = d-1)
+        }
+        rownames(out$par$main) <- c("a", "b", "loc", "scale_1", "scale_2", "shape")
+        colnames(out$par$main) <- sapply(dependent, function(x){paste0("Column", x)})
+        
+        Gamma_intrim <- matrix(0, nrow = d-1, ncol = d-1)
+        Gamma_entries <- lapply(v_comps, function(x){permutations(n = length(x), r = 2, v = x, repeats.allowed = TRUE)})
+        for(i in 1:n_comps){
+          Gamma_intrim[Gamma_entries[[i]]] <- res_1[[i]]$par$Gamma
+        }
+        if(any(is.na(Gamma_intrim))){
+          Gamma_intrim <- matrix(NA, nrow = d-1, ncol = d-1)
+        }
+        out$par$Gamma <- as(Gamma_intrim, "sparseMatrix")
+        
+        out$loglike <- sum(sapply(res_1, function(x){-x$value}))
+        out$convergence <- max(sapply(res_1, function(x){x$convergence}))
+        out$Z <- do.call(cbind, lapply(1:n_comps, function(i){res_1[[i]]$Z}))
+        if(any(is.na(out$Z))){
+          out$Z <- matrix(NA, nrow = nrow(out$Z), ncol = ncol(out$Z)) 
+        }
+        colnames(out$Z) <- sapply(dependent, function(x){paste0("Column", x)})
       }
     }
-    
-    res <- list()
-    res$par$a <- do.call(c, lapply(res_1, function(x){x$par$a}))
-    res$par$b <- do.call(c, lapply(res_1, function(x){x$par$b}))
-    res$par$mu <- do.call(c, lapply(res_1, function(x){x$par$mu}))
-    res$par$sigma_1 <- do.call(c, lapply(res_1, function(x){x$par$sigma_1}))
-    res$par$sigma_2 <- do.call(c, lapply(res_1, function(x){x$par$sigma_2}))
-    res$par$shape <- do.call(c, lapply(res_1, function(x){x$par$shape}))
-    res$par$Gamma <- matrix(0, nrow = d-1, ncol = d-1)
-    for(i in 1:comps$no){
-      if(length(v_comps[[i]]) == 1){
-        clique_edges <- matrix(rep(v_comps[[i]], 2), ncol = 2)
-      }
-      else{
-        clique_edges <- permutations(n = length(v_comps[[i]]), r = 2, v = v_comps[[i]], repeats.allowed = TRUE)
-      }
-      res$par$Gamma[clique_edges] <- res_1[[i]]$par$Gamma
-    }
-    res$value <- sapply(res_1, function(x){x$value})
-    res$convergence <- sapply(res_1, function(x){x$convergence})
-    res$Z <- do.call(cbind, lapply(res_1, function(x){x$Z}))
   }
-  else{
-    res <- qfun_MVAGGD_Gamma_graph(yex = yex, ydep = as.matrix(ydep), Gamma_zero = non_edges,
-                                   maxit = maxit, start = c(start), nOptim = nOptim)
-  }
-  
-  ## Get the output from the model
-  out <- list()
-  
-  par_out <- rbind(res$par$a, res$par$b, res$par$mu, res$par$sigma_1, res$par$sigma_2, res$par$shape)
-  par_out <- as.data.frame(par_out)
-  rownames(par_out) <- c("alpha", "beta", "loc", "scale_1", "scale_2", "shape")
-  colnames(par_out) <- sapply(dependent, function(i){paste0("Column", i)})
-  
-  Gamma_out <- res$par$Gamma
-  
-  out$par <- list(main = par_out, Gamma = Gamma_out)
-  
-  out$loglike <- -sum(res$value)
-  
-  out$convergence <- max(res$convergence)
-  
-  out_Z <- res$Z
-  out_Z <- as.data.frame(out_Z)
-  colnames(out_Z) <- sapply(dependent, function(i){paste0("Column", i)})
-  out$Z <- out_Z
+  class(out) <- "Cond_extremes_MVAGG"
   return(out)
 }
 
-qfun_MVAGGD_indep <- function(yex, ydep, maxit, start, nOptim){
-  #function for the optim to optimise over
+qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
+  ## Function for the optim to optimise over
   Qpos <- function(param, yex, ydep, negative = FALSE){
-    #get the starting parameters
+    ## Extract starting parameters
     a <- param[1]
     b <- param[2]
     mu <- param[3]
@@ -244,12 +236,12 @@ qfun_MVAGGD_indep <- function(yex, ydep, maxit, start, nOptim){
       return((-10^10)*(-1)^negative)
     }
     else{
-      ## get the Z data
+      ## Obtain the residuals
       b_yi <- yex^b
       z <- c((ydep - yex*a)/b_yi)
       res <- sum(dagg(x = z, loc = mu, scale_1 = sigma_1, scale_2 = sigma_2, shape = shape, log = TRUE)) - sum(log(b_yi))
       
-      #check the value is valid
+      ## Check the value is valid
       if(is.infinite(res)){
         res <- return((-10^10)*(-1)^negative)
         warning("Infinite value of Q in mexDependence")
@@ -258,36 +250,36 @@ qfun_MVAGGD_indep <- function(yex, ydep, maxit, start, nOptim){
     }
   }
   
+  ## Fit the model
   fit <- try(optim(par = start, fn = Qpos, yex = yex, ydep = ydep,
                    control = list(maxit = maxit),
                    negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
              silent = FALSE)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_MVAGGD")
+    warning("Error in optim call from Cond_extremes_MVAGG")
     out <- list()
     out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
     out$Z <- NA 
     out$value <- NA
     out$convergence <- NA
-    return(out)
   }
-  else if(fit$convergence != 0){
-    warning("Non-convergence in Cond_extremes_MVAGGD")
+  else if(fit$convergence != 0 | fit$value == 1e+10){
+    warning("Non-convergence in Cond_extremes_MVAGG")
     out <- list()
     out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
     out$Z <- NA 
     out$value <- NA
     out$convergence <- NA
-    return(out)
   }
   else if(!is.na(fit$par[1])){
-    #Extract MLEs of alpha and beta
+    ## Extract MLEs of alpha and beta
     a_hat <- fit$par[1]
     b_hat <- fit$par[2]
     
-    #obtain the residuals
+    ## Obtain the residuals
     Z <- (ydep - yex*a_hat)/(yex^b_hat)
     
+    ## Organise the output
     out <- list()
     out$par <- list(a = a_hat, b = b_hat, loc = fit$par[3], scale_1 = fit$par[4], scale_2 = fit$par[5], shape = fit$par[6])
     out$Z <- Z
@@ -295,16 +287,21 @@ qfun_MVAGGD_indep <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- fit$convergence
   }
   else{
+    warning("Unknown error in Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
+    out$Z <- NA 
+    out$value <- NA
+    out$convergence <- NA
   }
   return(out)
 }
 
-qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
+qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
   
-  #function for the optim to optimise over
+  ## Function for the optim to optimise over
   Qpos <- function(param, yex, ydep, Gamma_zero, negative = FALSE){
-    #get the starting parameters
+    ## Extract the the starting parameters
     d <- ncol(ydep)
     n <- length(yex)
     a <- param[1:d]
@@ -317,13 +314,13 @@ qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim)
       return((-10^10)*(-1)^negative)
     }
     else{
-      ## get the Z data
+      ## Obtain the residuals
       a_yi <- sapply(a, function(a){a*yex})
       b_yi <- sapply(b, function(b){yex^b})
       z <- (ydep - a_yi)/b_yi
       
-      ## get this on standard Gaussian margins
-      Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(paggd(q = z[,i], loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
+      ## Transform them onto standard Gaussian margins
+      Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
       Sigma_start <- cor(Q_F_z)
       if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z)) |
          any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
@@ -334,7 +331,7 @@ qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim)
       }
       else{
         ## Calculate the log likelihood function
-        l_f_z <- sapply(1:d, function(i){daggd(x = z[,i], loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
+        l_f_z <- sapply(1:d, function(i){dagg(x = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
         l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
         
         Lasso_est <- suppressWarnings(glasso(s = Sigma_start, rho = 0, penalize.diagonal = FALSE, zero = Gamma_zero, thr = 1e-9))
@@ -344,7 +341,7 @@ qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim)
         
         res <- l_mvnorm + sum(l_f_z) - sum(l_dnorm) - sum(log(b_yi))
         
-        #check the value is valid
+        ## Check the value is valid
         if(is.infinite(res)){
           res <- return((-10^10)*(-1)^negative)
           warning("Infinite value of Q in mexDependence")
@@ -354,22 +351,33 @@ qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim)
     }
   }
   
+  ## Fit the model
   fit <- try(optim(par = start, fn = Qpos, yex = yex, ydep = ydep,
                    control = list(maxit = maxit), Gamma_zero = Gamma_zero,
                    negative = TRUE, method = "BFGS", hessian = FALSE),
              silent = FALSE)
+  
+  ## Extract the output
+  d <- ncol(ydep)
+  n <- nrow(ydep)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$value <- NA
+    out$convergence <- NA
   }
-  else if(fit$convergence != 0){
-    warning("Non-convergence in Cond_extremes_graph")
+  else if(fit$convergence != 0 | fit$value == 1e+10){
+    warning("Non-convergence in Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$value <- NA
+    out$convergence <- NA
   }
   else if(!is.na(fit$par[1])){
-    #Extract MLEs of alpha and beta
-    d <- ncol(ydep)
-    n <- length(yex)
+    ## Extract MLEs from the model
     a_hat <- fit$par[1:d]
     b_hat <- fit$par[(d + 1):(2*d)]
     mu_hat <- fit$par[(2*d + 1):(3*d)]
@@ -377,34 +385,39 @@ qfun_MVAGGD_Gamma_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim)
     sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
     shape_hat <- fit$par[(5*d + 1):(6*d)]
     
-    #obtain the residuals
+    ## Obtain the residuals
     a_yi_hat <- sapply(a_hat, function(a){yex*a})
     b_yi_hat <- sapply(b_hat, function(b){yex^b})
     Z <- (ydep - a_yi_hat)/b_yi_hat
     
-    ## extract MLE of Gamma
-    Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(paggd(q = Z[,i], loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
-    
+    ## Extract MLE of Gamma
+    Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(Z[,i]), loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
     Lasso_est <- suppressWarnings(glasso(s = cor(Q_F_z), rho = 0, penalize.diagonal = FALSE, zero = Gamma_zero, thr = 1e-9))
     Gamma_hat <- Lasso_est$wi
     
+    ## Organise the output
     out <- list()
-    out$par <- list(a = a_hat, b = b_hat, mu = mu_hat, sigma_1 = sigma_1_hat, sigma_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
+    out$par <- list(a = a_hat, b = b_hat, loc = mu_hat, scale_1 = sigma_1_hat, scale_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
     out$Z <- Z
     out$value <- fit$value
     out$convergence <- fit$convergence
   }
   else{
+    warning("Unknown error in Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$value <- NA
+    out$convergence <- NA
   }
   return(out)
 }
 
-qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
+qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
   
-  #function for the optim to optimise over
+  ## Function for the optim to optimise over
   Qpos <- function(param, yex, ydep, negative = FALSE){
-    #get the starting parameters
+    ## Extract the the starting parameters
     d <- ncol(ydep)
     n <- length(yex)
     a <- param[1:d]
@@ -417,13 +430,13 @@ qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
       return((-10^10)*(-1)^negative)
     }
     else{
-      ## get the Z data
+      ## Obtain the residuals
       a_yi <- sapply(a, function(a){a*yex})
       b_yi <- sapply(b, function(b){yex^b})
       z <- (ydep - a_yi)/b_yi
       
-      ## get this on standard Gaussian margins
-      Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(paggd(q = z[,i], loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
+      ## Transform them onto standard Gaussian margins
+      Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
       Sigma_start <- cor(Q_F_z)
       if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z)) |
          any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
@@ -433,17 +446,17 @@ qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
         return((-10^10)*(-1)^negative)
       }
       else{
-        l_f_z <- sapply(1:d, function(i){daggd(x = z[,i], loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
+        ## Calculate the log likelihood function
+        l_f_z <- sapply(1:d, function(i){dagg(x = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
         l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
         
-        Lasso_est <- suppressWarnings(glasso(s = Sigma_start, rho = 0, penalize.diagonal = FALSE, thr = 1e-9))
-        chol_Gamma <- chol(Lasso_est$wi)
+        chol_Gamma <- chol(solve(Sigma_start))
         y <- chol_Gamma%*%t(Q_F_z)
         l_mvnorm <- -n*d*log(2*pi)/2 - n*sum(log(1/diag(chol_Gamma))) - sum(y^2)/2
         
         res <- l_mvnorm + sum(l_f_z) - sum(l_dnorm) - sum(log(b_yi))
         
-        #check the value is valid
+        ## Check the value is valid
         if(is.infinite(res)){
           res <- return((-10^10)*(-1)^negative)
           warning("Infinite value of Q in mexDependence")
@@ -453,22 +466,33 @@ qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
     }
   }
   
+  ## Fit the model
   fit <- try(optim(par = start, fn = Qpos, yex = yex, ydep = ydep,
                    control = list(maxit = maxit),
                    negative = TRUE, method = "BFGS", hessian = FALSE),
              silent = FALSE)
+  
+  ## Extract the output
+  d <- ncol(ydep)
+  n <- length(yex)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$value <- NA
+    out$convergence <- NA
   }
-  else if(fit$convergence != 0){
-    warning("Non-convergence in Cond_extremes_graph")
+  else if(fit$convergence != 0 | fit$value == 1e+10){
+    warning("Non-convergence in Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$value <- NA
+    out$convergence <- NA
   }
   else if(!is.na(fit$par[1])){
-    #Extract MLEs of alpha and beta
-    d <- ncol(ydep)
-    n <- length(yex)
+    ## Extract MLEs from the model
     a_hat <- fit$par[1:d]
     b_hat <- fit$par[(d + 1):(2*d)]
     mu_hat <- fit$par[(2*d + 1):(3*d)]
@@ -476,25 +500,29 @@ qfun_MVAGGD_Gamma_full <- function(yex, ydep, maxit, start, nOptim){
     sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
     shape_hat <- fit$par[(5*d + 1):(6*d)]
     
-    #obtain the residuals
+    ## Obtain the residuals
     a_yi_hat <- sapply(a_hat, function(a){yex*a})
     b_yi_hat <- sapply(b_hat, function(b){yex^b})
     Z <- (ydep - a_yi_hat)/b_yi_hat
     
-    ## extract MLE of Gamma
-    Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(paggd(q = Z[,i], loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
+    ## Extract MLE of Gamma
+    Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(Z[,i]), loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
+    Gamma_hat <- solve(cor(Q_F_z))
     
-    Lasso_est <- suppressWarnings(glasso(s = cor(Q_F_z), rho = 0, penalize.diagonal = FALSE, thr = 1e-9))
-    Gamma_hat <- Lasso_est$wi
-    
+    ## Organise the output
     out <- list()
-    out$par <- list(a = a_hat, b = b_hat, mu = mu_hat, sigma_1 = sigma_1_hat, sigma_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
+    out$par <- list(a = a_hat, b = b_hat, loc = mu_hat, scale_1 = sigma_1_hat, scale_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
     out$Z <- Z
     out$value <- fit$value
     out$convergence <- fit$convergence
   }
   else{
+    warning("Unknown error in Cond_extremes_MVAGG")
     out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+    out$Z <- matrix(NA, ncol = d, nrow = d)
+    out$value <- NA
+    out$convergence <- NA
   }
   return(out)
 }
