@@ -30,28 +30,28 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
   
   ## Obtain the starting parameters
   if(missing(start_HT)){
-    start_HT <- c(0.1, 0.1)
+    start_HT <- matrix(0.1, nrow = d-1, ncol = 2)
   }
   if(missing(start_AGG)){
-    start_AGG <- c(0, 1, 2, 1.5)
+    start_AGG <- matrix(rep(c(0, 1, 2, 1.5), d-1), nrow = d-1, ncol = 4, byrow = TRUE)
   }
   else if(!is.numeric(start_HT) | !is.numeric(start_AGG)){
     stop("start_HT and start_AGG must be vectors")
-  }
-  else if(length(start_HT) != 2*(d-1) | length(start_AGG) != 4*(d-1)){
-    stop("start_HT and start_AGG must be vectors of length 2(d-1) and 4(d-1), respectively")
-  }
-  else if(any(abs(start_HT) > 1)){
-    stop("Initial starting values are outside the parameter space for Heffernan and Tawn model")
-  }
-  else if(any(start_AGG[,-1] <= 0)){
-    stop("Initial starting values are outside the parameter space for MVAGG")
   }
   if(length(start_HT) == 2){
     start_HT <- matrix(rep(start_HT, d-1), ncol = 2, byrow = TRUE)
   }
   if(length(start_AGG) == 4){
     start_AGG <- matrix(rep(start_AGG, d-1), ncol = 4, byrow = TRUE)
+  }
+  if(length(start_HT) != 2*(d-1) | length(start_AGG) != 4*(d-1)){
+    stop("start_HT and start_AGG must be vectors of length 2 or 2(d-1) and 4 or 4(d-1), respectively")
+  }
+  else if(any(abs(start_HT) > 1)){
+    stop("Initial starting values are outside the parameter space for Heffernan and Tawn model")
+  }
+  else if(any(start_AGG[,-1] <= 0)){
+    stop("Initial starting values are outside the parameter space for MVAGG")
   }
   
   ## Separate data into the conditioning and unconditioned random variables
@@ -67,6 +67,10 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
   z <- as.matrix(sapply(res_HT, function(x){x$Z}))
   a_hat <- sapply(res_HT, function(x){x$par$a})
   b_hat <- sapply(res_HT, function(x){x$par$b})
+  
+  ## Update the starting parameter for the location parameter as this can be difficult
+  ## to initiate
+  start_AGG[,1] <- apply(z, 2, mean)
   
   ## If Heffernan and Tawn model has not fit, break the function now
   if(any(is.na(a_hat))){
@@ -85,7 +89,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
       
       ## Fit the independence model
       res <- lapply(1:(d-1), function(i){
-        qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,i]), maxit = maxit, start = c(start_AGG[i,]), nOptim = nOptim)})
+        qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,i]), maxit = maxit, start = c(start_AGG[i,]))})
       
       ## Extract the output
       out <- list()
@@ -126,8 +130,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
       
       if(n_edges_full == n_edges_graph_cond){
         ## Fit the saturated model
-        res <- qfun_MVAGG_Two_Step_Full(z = z, start = c(start_AGG), 
-                                         maxit = maxit, nOptim = nOptim)
+        res <- qfun_MVAGG_Two_Step_Full(z = z, start = c(start_AGG), maxit = maxit)
         
         ## Extract the output
         out <- list()
@@ -157,7 +160,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
           
           ## Fit the graphical model
           res <- qfun_MVAGG_Two_Step_Graph(z = z, Gamma_zero = non_edges,
-                                            maxit = maxit, start = c(start_AGG), nOptim = nOptim)
+                                           maxit = maxit, start = c(start_AGG))
           
           ## Extract the output
           out <- list()
@@ -192,26 +195,26 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
             if(n_vertices == 1){
               ## Fit independence model to this component
               res_1[[i]] <- qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,v_comps[[i]]]), 
-                                                       maxit = maxit, start = c(start_AGG[v_comps[[i]],]),
-                                                       nOptim = nOptim)
+                                                      start = c(start_AGG[v_comps[[i]],]),
+                                                      maxit = maxit)
             }
             else{
               all_edges_comp <- as.data.frame(combinations(n = n_vertices, r = 2, v = 1:n_vertices))
               g_edges_comp <- as.data.frame(as_edgelist(g_comps[[i]]))
               ## Fit saturated model to this component
               if(nrow(all_edges_comp) == nrow(g_edges_comp)){
-                res_1[[i]] <- qfun_MVAGG_Two_Step_Full(z = as.matrix(z[,v_comps[[i]]]), 
-                                                        maxit = maxit, start = c(start_AGG[v_comps[[i]],]),
-                                                        nOptim = nOptim)
+                res_1[[i]] <- qfun_MVAGG_Two_Step_Full(z = as.matrix(z[,v_comps[[i]]]),
+                                                       start = c(start_AGG[v_comps[[i]],]),
+                                                       maxit = maxit)
               }
               else{
                 ## Fit graphical model to this component
                 all_edges_comp$exists <- do.call(paste0, all_edges_comp) %in% do.call(paste0, g_edges_comp)
                 non_edges_comp <- as.matrix(all_edges_comp[which(all_edges_comp$exists == FALSE), 1:2])
                 res_1[[i]] <- qfun_MVAGG_Two_Step_Graph(z = as.matrix(z[,v_comps[[i]]]), 
-                                               Gamma_zero = non_edges_comp,
-                                               maxit = maxit, 
-                                               start = c(start_AGG[v_comps[[i]],]))
+                                                        Gamma_zero = non_edges_comp,
+                                                        start = c(start_AGG[v_comps[[i]],]),
+                                                        maxit = maxit)
               } 
             }
           }
@@ -236,7 +239,12 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
           Gamma_intrim <- matrix(0, nrow = d-1, ncol = d-1)
           Gamma_entries <- lapply(v_comps, function(x){permutations(n = length(x), r = 2, v = x, repeats.allowed = TRUE)})
           for(i in 1:n_comps){
-            Gamma_intrim[Gamma_entries[[i]]] <- res_1[[i]]$par$Gamma
+            if(nrow(Gamma_entries[[i]]) == 1){
+              Gamma_intrim[Gamma_entries[[i]]] <- 1
+            }
+            else{
+              Gamma_intrim[Gamma_entries[[i]]] <- res_1[[i]]$par$Gamma 
+            }
           }
           if(any(is.na(Gamma_intrim))){
             Gamma_intrim <- matrix(NA, nrow = d-1, ncol = d-1)
@@ -288,7 +296,7 @@ qfun_MVAGG_Two_Step_Indep <- function(z, maxit, start){
     out$value <- NA
     out$convergence <- NA
   }
-  else if(fit$convergence != 0 | fit$values == 1e+10){
+  else if(fit$convergence != 0 | fit$value == 1e+10){
     warning("Non-convergence in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
