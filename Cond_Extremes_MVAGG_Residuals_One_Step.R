@@ -1,6 +1,6 @@
 ################################################################################
 ## Reading in required scripts
-source("~/PhD/Project_2/Graphical_Conditional_Extremes/MVAGG_Functions.R")
+source("MVAGG_Functions.R")
 
 ################################################################################
 
@@ -39,7 +39,7 @@ Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
     stop("start must be a vector of length 6(d-1)")
   }
   else if(any(abs(start[,1:2]) > 1)){
-    stop("Initial starting values are outside the parameter sapce")
+    stop("Initial starting values are outside the parameter space")
   }
   if(length(start) == 6){
     start <- matrix(rep(start, d-1), ncol = 6, byrow = TRUE)
