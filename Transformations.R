@@ -24,13 +24,11 @@ semiparametric_unif_transform <- function(data, par){
   scale <- par[2]
   shape <- par[3]
   
-  ## Index of excesses
-  index <- which(data > u)
-  
   ## Below the threshold we use the empirical CDF
   z <- rank(data)/(n + 1)
   
-  ## Above the threhsold we assume a GPD tail
+  ## Above the threshold we assume a GPD tail
+  index <- which(data > u)
   pu <- length(index)/n
   if(abs(shape) < 1e-6){
     z[index] <- 1 - pu*exp(-exp(-(data[index] - u)/scale))
@@ -56,12 +54,11 @@ semiparametric_gpd_transform <- function(p, par, distFun){
   shape <- par[3]
   qu <- par[4]
   
-  ## Index of excesses
-  index <- which(p > qu)
-  
   ## Below the threshold
   z <- quantile(distFun, p)
+  
   ## Above the threshold
+  index <- which(p > qu)
   if(abs(shape) <= 1e-6){
     z[index] <- u + scale*log((1 - qu)/(1 - p[index]))
   }
@@ -75,7 +72,6 @@ semiparametric_gpd_transform <- function(p, par, distFun){
 ## Transform onto standard Laplace margins
 ## Uses the semi-parametric method of Coles & Tawn (1991)
 ## Threshold is selected using Murphy et al. (2024)
-
 X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   ## Checks on the inputs
   if(!is.numeric(x)){
@@ -105,14 +101,14 @@ X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   shape_star <- u_out$par[2]
   
   ## Transform the data onto Laplace margins
-  y <- plaplace(semiparametric_unif_transform(data = x, u = u_star, par = par_star))
+  y <- qlaplace(semiparametric_unif_transform(data = x, par = c(u_star, scale_star, shape_star)))
   
   ## Output
   out <- list(data = list(X = x, Y = y),
               par = list(u = u_star,
-                         qu = qu_star,
                          scale = scale_star,
-                         shape = shape_star))
+                         shape = shape_star,
+                         qu = qu_star))
   class(out) <- "Laplace_Transform"
   return(out)
 }
