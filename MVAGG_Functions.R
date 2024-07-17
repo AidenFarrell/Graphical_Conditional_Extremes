@@ -112,17 +112,33 @@ fit_agg <- function(par, data){
   if(length(par) != 4){stop("invalid number of parameters")}
   
   ## Fit the model
-  fit <- optim(par = par, fn = llh_agg, x = data, negative = TRUE,
-               control = list(maxit = 1e+9), method = "Nelder-Mead")
-  
-  ## Extract the output
-  out <- list()
-  out$par <- as.matrix(fit$par)
-  rownames(out$par) <- c("loc", "scale_1", "scale_2", "shape")
-  
-  out$llh <- -fit$value
-  out$convergence <- fit$convergence
-  
+  fit <- try(optim(par = par, fn = llh_agg, x = data, negative = TRUE,
+               control = list(maxit = 1e+9), method = "Nelder-Mead"),
+             silent = FALSE)
+  if(inherits(fit, "try-error")){
+    warning("Error in optim call from fit_agg")
+    out <- list()
+    out$par <- matrix(NA, nrow = 4, ncol = 1)
+    rownames(out$par) <- c("loc", "scale_1", "scale_2", "shape")
+    out$llh <- NA
+    out$convergence <- NA
+  }
+  else if(fit$convergence != 0 | fit$value == 1e+10){
+    warning("Non-convergence in fit_agg")
+    out <- list()
+    out$par <- matrix(NA, nrow = 4, ncol = 1)
+    rownames(out$par) <- c("loc", "scale_1", "scale_2", "shape")
+    out$llh <- NA
+    out$convergence <- NA
+  }
+  else{
+    ## Extract the output
+    out <- list()
+    out$par <- as.matrix(fit$par)
+    rownames(out$par) <- c("loc", "scale_1", "scale_2", "shape")
+    out$llh <- -fit$value
+    out$convergence <- fit$convergence 
+  }
   return(out)
 }
 
