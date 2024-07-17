@@ -201,7 +201,12 @@ Cond_Extremes_MVAGG <- function(data, cond, graph = NA, start,
         Gamma_intrim <- matrix(0, nrow = d-1, ncol = d-1)
         Gamma_entries <- lapply(v_comps, function(x){permutations(n = length(x), r = 2, v = x, repeats.allowed = TRUE)})
         for(i in 1:n_comps){
-          Gamma_intrim[Gamma_entries[[i]]] <- res_1[[i]]$par$Gamma
+          if(nrow(Gamma_entries[[i]]) == 1){
+            Gamma_intrim[Gamma_entries[[i]]] <- 1
+          }
+          else{
+            Gamma_intrim[Gamma_entries[[i]]] <- res_1[[i]]$par$Gamma 
+          }
         }
         if(any(is.na(Gamma_intrim))){
           Gamma_intrim <- matrix(NA, nrow = d-1, ncol = d-1)
