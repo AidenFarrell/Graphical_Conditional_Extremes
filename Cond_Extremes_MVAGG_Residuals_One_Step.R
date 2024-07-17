@@ -6,10 +6,10 @@ source("MVAGG_Functions.R")
 
 ## Conditional extremes model under the one-step approach assuming the residuals
 ## follow a multivariate asymmetric generalised Gaussian distribution
-Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
+Cond_Extremes_MVAGG <- function(data, cond, graph = NA, start,
                                 maxit = 1e+6, nOptim = 1){
   
-  #get information from the data
+  ## Obtain information from the data
   dim_data <- dim(data)
   if(is.null(dim_data)){
     stop("Data must be a matrix with at least d = 2 columns")
@@ -19,7 +19,7 @@ Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
     n <- dim_data[1]
   }
   
-  ## check the conditioning random variable is valid and get dependent random variables
+  ## Check the conditioning random variable is valid and get dependent random variables
   if(length(cond) > 1){
     stop("cond must be of length 1")
   }
@@ -28,7 +28,7 @@ Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
   }
   dependent <- (1:d)[-cond]
   
-  ## get the starting parameters
+  ## Obtain the starting parameters
   if(missing(start)){
     start <- c(0.1, 0.1, 0, 1.5, 2, 1.5)
   }
@@ -45,7 +45,7 @@ Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
     start <- matrix(rep(start, d-1), ncol = 6, byrow = TRUE)
   }
   
-  #separate data into the conditioning and unconditioned random variables
+  ## Separate data into the conditioning and unconditioned random variables
   yex <- as.matrix(data[,cond])
   ydep <- as.matrix(data[,-cond])
   
@@ -218,7 +218,7 @@ Cond_extremes_MVAGG <- function(data, cond, graph = NA, start,
       }
     }
   }
-  class(out) <- "Cond_extremes_MVAGG"
+  class(out) <- "Cond_Extremes_MVAGG"
   return(out)
 }
 
@@ -256,7 +256,7 @@ qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
                    negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
              silent = FALSE)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_MVAGG")
+    warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
     out$Z <- NA 
@@ -264,7 +264,7 @@ qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Non-convergence in Cond_extremes_MVAGG")
+    warning("Non-convergence in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
     out$Z <- NA 
@@ -287,7 +287,7 @@ qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- fit$convergence
   }
   else{
-    warning("Unknown error in Cond_extremes_MVAGG")
+    warning("Unknown error in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
     out$Z <- NA 
@@ -361,7 +361,7 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
   d <- ncol(ydep)
   n <- nrow(ydep)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_MVAGG")
+    warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -369,7 +369,7 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     out$convergence <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Non-convergence in Cond_extremes_MVAGG")
+    warning("Non-convergence in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -403,7 +403,7 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     out$convergence <- fit$convergence
   }
   else{
-    warning("Unknown error in Cond_extremes_MVAGG")
+    warning("Unknown error in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -476,7 +476,7 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
   d <- ncol(ydep)
   n <- length(yex)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_MVAGG")
+    warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -484,7 +484,7 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Non-convergence in Cond_extremes_MVAGG")
+    warning("Non-convergence in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -517,10 +517,10 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- fit$convergence
   }
   else{
-    warning("Unknown error in Cond_extremes_MVAGG")
+    warning("Unknown error in Cond_Extremes_MVAGG")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
-    out$Z <- matrix(NA, ncol = d, nrow = d)
+    out$Z <- matrix(NA, nrow = n, ncol = d)
     out$value <- NA
     out$convergence <- NA
   }

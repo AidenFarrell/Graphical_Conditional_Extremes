@@ -1,6 +1,6 @@
 ## Functions to fit the CMEVM when we assume that the residuals are multivariate Gaussian
 ## with some graphical structure
-Cond_extremes_MVN <- function(data, cond, graph = NA, 
+Cond_Extremes_MVN <- function(data, cond, graph = NA, 
                               constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
                               maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
   
@@ -264,7 +264,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
                    constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
              silent = TRUE)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
@@ -272,7 +272,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     out$Z <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Non-convergence in Cond_extremes_graph")
+    warning("Non-convergence in Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
@@ -288,7 +288,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
                        constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
                  silent = TRUE)
       if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_extremes_graph")
+        warning("Error in optim call from Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
@@ -296,7 +296,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
         out$Z <- NA
       }
       else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Non-convergence in Cond_extremes_graph")
+        warning("Non-convergence in Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
@@ -323,13 +323,14 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     out$Z <- Z
   }
   else{
-    warning("Unknown error in Cond_extremes_graph")
+    warning("Unknown error in Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
     out$Z <- NA
   }
+  class(out) <- "Cond_Extremes_MVN"
   return(out)
 }
 
