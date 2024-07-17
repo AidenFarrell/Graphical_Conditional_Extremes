@@ -58,6 +58,9 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
   yex <- as.matrix(data[,cond])
   ydep <- as.matrix(data[,-cond])
   
+  ## Step 1
+  ## Fit the original conditional multivaraite extremes model to the data to
+  ## obtain the fitted residuals and dependence parameters
   res_HT <- lapply(1:(d-1), function(i){
     qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
                    constrain = constrain, aLow = aLow, q = q, v = v,
@@ -82,7 +85,9 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
     out$convergence <- NA
   }
   else{
-    ## Now fit the graphical model to Z|i
+    ## Step 2
+    ## Model the fitted residuals using a MVAGG distribution
+    
     ## Determine the components in the model
     if(!is_igraph(graph)){
       warning("\nNo graphical structure has been provided.\n \nWe assume the residuals are IID Guassian random variables.")
