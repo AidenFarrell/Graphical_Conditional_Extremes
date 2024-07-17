@@ -22,24 +22,7 @@ Cond_Sigma <- function(x, j){
   return(Sigma_bar)
 }
 
-## Function to convert a covariance matrix to a correlation matrix
-Sigma2rho <- function(Sigma){
-  d <- dim(Sigma)[1]
-  rho <- diag(1, d)
-  for(i in 1:d){
-    for(j in 1:d){
-      if(i >= j){
-        next()
-      }
-      else{
-        rho[i,j] <- rho[j,i] <- Sigma[i,j]/sqrt(Sigma[i,i]*Sigma[j,j])
-      }
-    }
-  }
-  return(rho)
-}
-
-## add NA into a vector position
+## Add NA into a vector position
 Add_NA_Vector <- function(x, j){
   d <- length(x) + 1
   if(j < 0 | j > d | j%%1 != 0){
@@ -57,7 +40,7 @@ Add_NA_Vector <- function(x, j){
   return(x)
 }
 
-## add row and column of NAs into a matrix
+## Add row and column of NAs into a matrix
 Add_NA_Matrix <- function(x, j){
   if(!is.square.matrix(x)){
     stop("x must be a square matrix")
