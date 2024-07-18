@@ -210,7 +210,7 @@ Cond_Extremes_MVN <- function(data, cond, graph = NA,
       }
     }
   }
-  class(out) <- "Cond_extremes_MVN"
+  class(out) <- "Cond_Extremes_MVN"
   return(out)
 }
 
@@ -395,7 +395,7 @@ qfun_MVN_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     out$convergence <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -411,7 +411,7 @@ qfun_MVN_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
                  silent = TRUE)
       
       if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_extremes_graph")
+        warning("Error in optim call from Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
         out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -419,7 +419,7 @@ qfun_MVN_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
         out$convergence <- NA
       }
       else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Error in optim call from Cond_extremes_graph")
+        warning("Error in optim call from Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
         out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -449,7 +449,7 @@ qfun_MVN_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     out$Z <- Z
   }
   else{
-    warning("Unknown error in Cond_extremes_graph")
+    warning("Unknown error in Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -502,7 +502,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
   d <- ncol(ydep)
   n <- length(yex)
   if(inherits(fit, "try-error")){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -510,7 +510,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
     out$convergence <- NA
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
-    warning("Error in optim call from Cond_extremes_graph")
+    warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -526,7 +526,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
                  silent = TRUE)
       
       if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_extremes_graph")
+        warning("Error in optim call from Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
         out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -534,7 +534,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
         out$convergence <- NA
       }
       else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Error in optim call from Cond_extremes_graph")
+        warning("Error in optim call from Cond_Extremes_MVN")
         out <- list()
         out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
         out$Z <- matrix(NA, nrow = n, ncol = d)
@@ -561,7 +561,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
     out$Z <- Z
   }
   else{
-    warning("Unknown error in Cond_extremes_graph")
+    warning("Unknown error in Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), mu = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
