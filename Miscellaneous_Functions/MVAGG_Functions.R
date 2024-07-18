@@ -205,8 +205,8 @@ rmvagg <- function(n, loc, scale_1, scale_2, shape, Gamma){
     if(length(scale_2) == 1){scale_2 <- rep(scale_2, d)}
     if(length(shape) == 1){shape <- rep(shape, d)}
     
-    p <- apply(sparseMVN::rmvn.sparse(n = n, mu = rep(0, d), CH = Cholesky(Gamma)), 1, pnorm)
-    z <- sapply(1:d, function(i){qaggd(p = p[i,], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
+    p <- apply(rmvn.sparse(n = n, mu = rep(0, d), CH = Cholesky(Gamma)), 1, pnorm)
+    z <- sapply(1:d, function(i){qagg(p = p[i,], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
     return(z)
   }
 }
