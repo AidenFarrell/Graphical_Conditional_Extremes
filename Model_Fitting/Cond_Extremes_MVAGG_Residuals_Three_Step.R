@@ -1,7 +1,12 @@
 ################################################################################
+## Reading in required packages
+required_pckgs <- c("glasso")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
 ## Reading in required scripts
-source("MVAGG_Functions.R")
-source("Cond_Extremes_MVN_Residuals.R")
+source("Miscellaneous_Functions/MVAGG_Functions.R")
+source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 
 ################################################################################
 
@@ -133,7 +138,7 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
         all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
         non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
         
-        if(is_empty(non_edges)){
+        if(nrow(non_edges) == 0){
           out$par$Gamma <- as(solve(cor(Z_Gaussian)), "sparseMatrix")
         }
         else{

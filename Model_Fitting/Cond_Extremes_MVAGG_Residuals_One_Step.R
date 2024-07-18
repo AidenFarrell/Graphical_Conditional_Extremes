@@ -1,6 +1,11 @@
 ################################################################################
+## Reading in required packages
+required_pckgs <- c("glasso")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
 ## Reading in required scripts
-source("MVAGG_Functions.R")
+source("Miscellaneous_Functions/MVAGG_Functions.R")
 
 ################################################################################
 

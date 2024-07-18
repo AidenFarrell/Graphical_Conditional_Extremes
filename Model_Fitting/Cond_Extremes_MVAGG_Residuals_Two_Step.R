@@ -1,7 +1,12 @@
 ################################################################################
+## Reading in required packages
+required_pckgs <- c("glasso")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
 ## Reading in required scripts
-source("Cond_Extremes_MVN_Residuals.R")
-source("MVAGG_Functions.R")
+source("Miscellaneous_Functions/MVAGG_Functions.R")
+source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 
 ################################################################################
 Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA, 
@@ -503,8 +508,6 @@ qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
     
     ## extract MLE of Gamma
     Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
-    # Lasso_est <- suppressWarnings(glasso(s = cor(Q_F_z), rho = 0, penalize.diagonal = FALSE, thr = 1e-9))
-    # Gamma_hat <- Lasso_est$wi
     Gamma_hat <- solve(cor(Q_F_z))
     
     out <- list()
