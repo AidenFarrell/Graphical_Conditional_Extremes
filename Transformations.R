@@ -95,7 +95,7 @@ X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   u_out <- thresh_qq_metric(data = x, thresh = u_poss, k = k, m = m)
   
   ## Get the output from the threshold selection
-  u_star <- u_out$thresh
+  u_star <- unname(u_out$thresh)
   qu_star <- q[which(u_poss == u_star)]
   scale_star <- u_out$par[1]
   shape_star <- u_out$par[2]
