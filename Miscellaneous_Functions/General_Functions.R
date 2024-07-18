@@ -1,4 +1,10 @@
-## Function to get the covaraince matrix when we condition on one random variable
+################################################################################
+## Reading in required packages
+required_pckgs <- c("matrixcalc")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
+## Function to get the covariance matrix when we condition on one random variable
 Cond_Sigma <- function(x, j){
   if(!is.square.matrix(x)){
     stop("x must be a square matrix")
