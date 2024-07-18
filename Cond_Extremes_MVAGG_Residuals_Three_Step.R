@@ -157,6 +157,7 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
       
       out$convergence <- max(sapply(res_HT, function(x){x$convergence}),
                              sapply(res_AGG, function(x){x$convergence}))  
+      class(out) <- "Cond_Extremes_MVAGG"
       return(out)
     }
   }
