@@ -1,3 +1,10 @@
+################################################################################
+## Reading in required packages
+required_pckgs <- c("Matrix", "sparseMVN")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
+
+################################################################################
+
 #Functions for the AGGD
 #Parameterisation as given by https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8959693
 
@@ -7,7 +14,7 @@
 dagg <- function(x, loc, scale_1, scale_2, shape, log = FALSE){
   
   ## checks
-  if(!is.vector(x)){stop("x must be a vector")}
+  if(!is.numeric(x)){stop("x must be a vector")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
   }
@@ -32,7 +39,7 @@ dagg <- function(x, loc, scale_1, scale_2, shape, log = FALSE){
 pagg <- function(q, loc, scale_1, scale_2, shape, log = FALSE){
   
   ## checks
-  if(!is.vector(q)){stop("q must be a vector")}
+  if(!is.numeric(q)){stop("q must be a vector")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
   }
@@ -56,7 +63,7 @@ pagg <- function(q, loc, scale_1, scale_2, shape, log = FALSE){
 
 ## Qunatile function
 qagg <- function(p, loc, scale_1, scale_2, shape){
-  if(!is.vector(p)){stop("p must be a vector")}
+  if(!is.numeric(p)){stop("p must be a vector")}
   if(any(p < 0) | any(p > 1)){stop("p must be in the region [0,1]")}
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("scale and shape must be a positive real number")
@@ -73,7 +80,7 @@ qagg <- function(p, loc, scale_1, scale_2, shape){
 
 ## Random generation
 ragg <- function(n, loc, scale_1, scale_2, shape){
-  if(length(n) > 1 | n%%1 != 0){
+  if(length(n) > 1 | n <= 0 | n%%1 != 0){
     stop("n must be a single positive integer")
   }
   if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
@@ -164,10 +171,11 @@ dmvagg <- function(data, loc, scale_1, scale_2, shape, log = FALSE){
   }
   else{
     ## calculate the density
-    l_f_z <- sapply(1:d, function(i){daggd(x = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i], log = TRUE)})
+    l_f_z <- sapply(1:d, function(i){dagg(x = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i], log = TRUE)})
     
-    Q_F_z <- sapply(1:d, function(i){qnorm(paggd(q = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i]))})
-    l_mvnorm <- mvtnorm::dmvnorm(x = Q_F_z, mean = rep(0, d), sigma = cor(Q_F_z), log = TRUE)
+    Q_F_z <- sapply(1:d, function(i){qnorm(pagg(q = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i]))})
+    Gamma <- as(solve(cor(Q_F_z)), "sparseMatrix")
+    l_mvnorm <- dmvn.sparse(x = Q_F_z, mu = rep(0, d), CH = Cholesky(Gamma), log = TRUE)
     l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
     
     z <- l_mvnorm + apply((l_f_z - l_dnorm), 1, sum)
@@ -178,29 +186,27 @@ dmvagg <- function(data, loc, scale_1, scale_2, shape, log = FALSE){
   }
 }
 
-## Random sample generation
-rmvagg <- function(n, dim, loc, scale_1, scale_2, shape, Sigma){
+## Random generation
+rmvagg <- function(n, loc, scale_1, scale_2, shape, Gamma){
   #Checks on parameters
-  if(dim(Sigma)[1] != dim){
-    stop("dim and Sigma do not match")
+  if(!(class(Gamma) != "dgCMatrix" | class(Gamma) != "dsCMatrix")){
+    stop("Gamma must be sparseMatrix")
   }
-  else if(dim(Sigma)[1] != dim | dim(Sigma)[2] != dim){
-    stop("Sigma is not a dxd matrix")
-  }
-  else if(any(diag(Sigma) < 0) | min(eigen(Sigma)$values) <= 0 | !isTRUE(all.equal(Sigma, t(Sigma)))){
-    stop("Sigma is not a valid covaraince matrix")
+  else if(length(n) > 1 | n <= 0 | n%%1 != 0){
+    stop("n must be a single positive integer")
   }
   else if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("Invalid parameters provided")
   }
   else{
-    if(length(loc) == 1){loc <- rep(loc, dim)}
-    if(length(scale_1) == 1){scale_1 <- rep(scale_1, dim)}
-    if(length(scale_2) == 1){scale_2 <- rep(scale_2, dim)}
-    if(length(shape) == 1){shape <- rep(shape, dim)}
+    d <- dim(Gamma)[1]
+    if(length(loc) == 1){loc <- rep(loc, d)}
+    if(length(scale_1) == 1){scale_1 <- rep(scale_1, d)}
+    if(length(scale_2) == 1){scale_2 <- rep(scale_2, d)}
+    if(length(shape) == 1){shape <- rep(shape, d)}
     
-    p <- t(apply(mvtnorm::rmvnorm(n = n, mean = rep(0, dim), sigma = Sigma), 1, pnorm))
-    z <- sapply(1:dim, function(i){qaggd(p = p[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
+    p <- apply(sparseMVN::rmvn.sparse(n = n, mu = rep(0, d), CH = Cholesky(Gamma)), 1, pnorm)
+    z <- sapply(1:d, function(i){qaggd(p = p[i,], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
     return(z)
   }
 }
