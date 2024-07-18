@@ -11,7 +11,7 @@ source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 ################################################################################
 Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA, 
                                          start_HT = c(0.1, 0.1), start_AGG = c(0, 1, 2, 1.5),
-                                         constrain = TRUE, q = c(0,1), v = 10, aLow = -1,
+                                         constrain = TRUE, q = c(0,1), v = 20, aLow = -1,
                                          maxit = 1e+6, nOptim = 1){
   
   ## Obtain information from the data
