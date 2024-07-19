@@ -85,7 +85,6 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
     out$Z <- matrix(NA, nrow = n, ncol = d)
-    out$value <- NA
     out$convergence <- NA
   }
   else{
@@ -109,7 +108,6 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
       out <- list()
       out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
       out$Z <- matrix(NA, nrow = n, ncol = d)
-      out$value <- NA
       out$convergence <- NA
     }
     else{
@@ -144,9 +142,18 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
         else{
           ## Use a graphical model
           ## Determine the missing edges in the graph
-          fit_glasso <- suppressWarnings(glasso(s = cor(Z_Gaussian), rho = 0, nobs = n,
-                                                zero = non_edges, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)) 
-          out$par$Gamma <- as(fit_glasso$wi, "sparseMatrix")
+          fit_glasso <- try(suppressWarnings(glasso(s = cor(Z_Gaussian), rho = 0, nobs = n,
+                                                    zero = non_edges, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)), silent = TRUE)
+          if(inherits(fit_glasso, "try-error")){
+            warning("glasso will not fit for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
+            out <- list()
+            out$par <- list(loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+            out$Z <- matrix(NA, nrow = n, ncol = d)
+            out$convergence <- NA
+          }
+          else{
+            out$par$Gamma <- as(fit_glasso$wi, "sparseMatrix") 
+          }
         }
       }
       
