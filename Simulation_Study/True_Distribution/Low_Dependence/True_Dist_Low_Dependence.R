@@ -831,3 +831,88 @@ dev.off()
 
 ################################################################################
 
+## Compare the log-likelihoods from the various models to affirm that we don't lose
+## information by doing the iterative approach
+
+## Extract the log-likelihood for the various models
+log_like_true <- 
+  lapply(1:length(n_excesses), function(i){
+    sapply(1:d, function(j){
+      sapply(1:n_sim, function(k){
+        sum(dmvagg(data = Z_not_i[[i]][[j]][[k]],
+                   loc = loc_true[-j],
+                   scale_1 = scale_1_true[-j],
+                   scale_2 = scale_2_true[-j],
+                   shape = shape_true[-j],
+                   Gamma = as(solve(rho_true_i[[j]]), "sparseMatrix"), log = TRUE)) -
+          sum(sapply(beta_true[-j], function(x){x*log(Yi_large[[i]][[j]][[k]])}))
+      })})})
+
+log_like_One_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_One_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_One_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+## Compare median and 95% confidence interval of bias between the model-based and
+## true log-likelihood
+probs = c(0.5, 0.025, 0.975)
+
+pmap(.l = list(x = log_like_true, y = log_like_One_Step_Indep),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Indep),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Indep),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_One_Step_Graph),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Graph),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Graph),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_One_Step_Full),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Full),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Full),
+     .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+## differences are consistent across the iterative procedures as expected
