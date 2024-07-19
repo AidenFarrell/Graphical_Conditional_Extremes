@@ -9,6 +9,37 @@ source("Miscellaneous_Functions/MVAGG_Functions.R")
 source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 
 ################################################################################
+## Function to calculate the log-likelihood of the model
+log_like_model <- function(fit, y){
+  if(class(fit) != "Cond_Extremes_MVAGG"){
+    stop("fit must be of class Cond_Extremes_MVAGG")
+  }
+  if(!is.numeric(y)){
+    stop("y must be a vector")
+  }
+  ## Extract the output
+  b <- fit$par$main[2,]
+  loc <- fit$par$main[3,]
+  scale_1 <- fit$par$main[4,]
+  scale_2 <- fit$par$main[5,]
+  shape <- fit$par$main[6,]
+  Gamma <- fit$par$Gamma
+  Z <- fit$Z
+  
+  ## Part 1
+  ll_1 <- sum(dmvagg(data = Z, loc = loc, scale_1 = scale_1, scale_2 = scale_2,
+                     shape = shape, Gamma = Gamma, log = TRUE))
+  
+  ## Part 2
+  ll_2 <- sum(sapply(b, function(x){x*log(y)}))
+  
+  ## Full log-likelihood
+  llh <- ll_1 - ll_2
+  return(llh)
+}
+
+## Function to fit the CMEVM assuming the residuals follow a MVAGG
+## Use the two-step method here
 Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA, 
                                          start_HT = c(0.1, 0.1), start_AGG = c(0, 1, 2, 1.5),
                                          constrain = TRUE, q = c(0,1), v = 20, aLow = -1,
@@ -86,7 +117,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
     out$Z <- matrix(NA, nrow = n, ncol = d)
-    out$value <- NA
+    out$loglike <- NA
     out$convergence <- NA
   }
   else{
@@ -125,7 +156,6 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
         out$par$Gamma <- sparseMatrix(i = 1:(d-1), j = 1:(d-1), x = rep(1, d-1))
       }
       
-      out$loglike <- sum(sapply(res, function(x){-x$value}))
       out$convergence <- max(sapply(res, function(x){x$convergence}))
     }
     else{
@@ -158,7 +188,6 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
         
         out$par$Gamma <- as(res$par$Gamma, "sparseMatrix")
         
-        out$loglike <- -res$value
         out$convergence <- res$convergence
       }
       else{
@@ -188,7 +217,6 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
           
           out$par$Gamma <- as(res$par$Gamma, "sparseMatrix")
           
-          out$loglike <- -res$value
           out$convergence <- res$convergence
         }
         else{
@@ -261,13 +289,18 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
           }
           out$par$Gamma <- as(Gamma_intrim, "sparseMatrix")
           
-          out$loglike <- sum(sapply(res_1, function(x){-x$value}))
           out$convergence <- max(sapply(res_1, function(x){x$convergence}))
         }
       }
     }
   }
   class(out) <- "Cond_Extremes_MVAGG"
+  if(any(is.na(out$par$main))){
+    out$loglike <- NA
+  }
+  else{
+    out$loglike <- log_like_model(out, y = yex) 
+  }
   return(out)
 }
 
