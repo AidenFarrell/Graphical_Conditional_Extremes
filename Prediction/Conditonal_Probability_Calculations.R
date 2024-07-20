@@ -1,7 +1,7 @@
 ## Probability Calculations
 
 ## P[X_{A} > u_{A} | X_{i} > u_{i}] some set A
-p_data_surv_multi_new <- function(data, cond, uncon, u){
+p_data_surv_multi <- function(data, cond, uncon, u){
   
   ## Checks
   if(!is.matrix(data)){
