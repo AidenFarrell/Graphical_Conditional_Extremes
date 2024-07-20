@@ -28,6 +28,35 @@ source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
 
 ################################################################################
+out <- readRDS("/Users/aidenfarrell/Documents/MVN_Low_Dependence_D5.RData")
+
+d <- length(out$transforms) 
+n_sim <- length(out$transforms[[1]])
+n_data <- length(out$transforms[[1]][[1]]$data$X)
+dqu = out$par_true$dqu
+
+## Transforms
+X_to_Y <- out$transforms
+
+## get the data
+X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+
+## Get the output from the GPD fits
+u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
+
+fit_HT <- out$CMEVM_fits$HT
+fit_EH <- out$CMEVM_fits$EH
+fit_One_Step_Graph <- out$CMEVM_fits$One_Step_Graph
+fit_Two_Step_Graph <- out$CMEVM_fits$Two_Step_Graph
+fit_Three_Step_Indep <- out$CMEVM_fits$Three_Step_Indep
+fit_Three_Step_Graph <- out$CMEVM_fits$Three_Step_Graph
+fit_Three_Step_Full <- out$CMEVM_fits$Three_Step_Full
+
+################################################################################
 ## plotting functions for later
 boxplot_MLEs <- function(data, methods, y_lab){
   
@@ -50,12 +79,15 @@ boxplot_MLEs <- function(data, methods, y_lab){
   plot_data$Dependent_Variable <- rep(rep(1:p, each = n_sim*n_methods), d_data)
   plot_data$Dependent_Variable <- factor(plot_data$Dependent_Variable, levels = 1:p)
   
+  ## Define custom labels for facets
+  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  
   ## plot the data
   plot_out <- ggplot(data = plot_data, aes(x = Dependent_Variable, y = y, fill = Method)) + 
     geom_boxplot() +
     theme(legend.position = "top") +
-    labs(x = "Depednent Varaible", y = y_lab) +
-    facet_grid(cols = vars(Conditioning_Varaible))
+    labs(x = "Depednent Varaible (j)", y = y_lab) +
+    facet_grid(cols = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels))
   print(plot_out)
 }
 
@@ -100,11 +132,14 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
   plot_data$Pair <- rep(rep(x_labels, each = n*n_methods), d_data)
   plot_data$Pair <- factor(plot_data$Pair, levels = x_labels)
   
+  ## Define custom labels for facets
+  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  
   plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method)) + 
     geom_boxplot() +
     theme(legend.position = "top") +
     labs(x = "Pair", y = y_lab) +
-    facet_grid(rows = vars(Conditioning_Varaible)) +
+    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
     geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
   
   return(plot_out)
@@ -457,137 +492,95 @@ Gamma_hat_Three_Step_Full <- lapply(1:d, function(j){
 method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
 p <- d
 
-y_lab <- c(expression(hat(alpha)),
-           expression(hat(beta)),
-           expression(hat(nu)),
-           expression(hat(kappa[1])),
-           expression(hat(kappa[2])), 
-           expression(hat(delta)))
+y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
+           expression(hat(beta)[j ~ "|" ~ i]),
+           expression(hat(nu)[j ~ "|" ~ i]),
+           expression(hat(kappa[1])[j ~ "|" ~ i]),
+           expression(hat(kappa[2])[j ~ "|" ~ i]),
+           expression(hat(delta)[j ~ "|" ~ i]))
 
 # Alpha
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Alpha.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Alpha.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(a_hat_One_Step_Graph[[i]][,j],
           a_hat_Two_Step_Graph[[i]][,j],
           a_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[1])
-# dev.off()
+dev.off()
 
 # Beta
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Beta.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Beta.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(b_hat_One_Step_Graph[[i]][,j],
           b_hat_Two_Step_Graph[[i]][,j],
           b_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[2])
-# dev.off()
+dev.off()
 
 # Location
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Location.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Location.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(loc_hat_One_Step_Graph[[i]][,j],
           loc_hat_Two_Step_Graph[[i]][,j],
           loc_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[3])
-# dev.off()
+dev.off()
 
 # Scale (Left)
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Scale_Left.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Scale_Left.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(scale_1_hat_One_Step_Graph[[i]][,j],
           scale_1_hat_Two_Step_Graph[[i]][,j],
           scale_1_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[4])
-# dev.off()
+dev.off()
 
 # Scale (Right)
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Scale_Right.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Scale_Right.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(scale_2_hat_One_Step_Graph[[i]][,j],
           scale_2_hat_Two_Step_Graph[[i]][,j],
           scale_2_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[5])
-# dev.off()
+dev.off()
 
 ## check that the left and right scale are not the same
-plot_out <- vector("list", d*d)
-xlim = c(floor(min(sapply(scale_1_hat_Three_Step_Graph, min, na.rm = TRUE),
-                   sapply(scale_2_hat_Three_Step_Graph, min, na.rm = TRUE))/0.1)*0.1,
-         ceiling(max(sapply(scale_1_hat_Three_Step_Graph, max, na.rm = TRUE),
-                     sapply(scale_2_hat_Three_Step_Graph, max, na.rm = TRUE))/0.1)*0.1)
-ylim = c(floor(min(sapply(scale_1_hat_Three_Step_Graph, min, na.rm = TRUE),
-                   sapply(scale_2_hat_Three_Step_Graph, min, na.rm = TRUE))/0.1)*0.1,
-         ceiling(max(sapply(scale_1_hat_Three_Step_Graph, max, na.rm = TRUE),
-                     sapply(scale_2_hat_Three_Step_Graph, max, na.rm = TRUE))/0.1)*0.1)
-count <- 1
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
-for(i in 1:d){
-  for(j in 1:d){
-    if(i == j){
-      plot_out[[count]] <- ggplot(data = data.frame()) + 
-        geom_point() + lims(x = xlim, y = ylim) + labs(x = "", y = "", title = "")
-      count <- count + 1
-    }
-    else if(i == 3 & j == 1){
-      plot_data <- data.frame(scale_1 = scale_1_hat_Three_Step_Graph[[i]][,j],
-                              scale_2 = scale_2_hat_Three_Step_Graph[[i]][,j])
-      plot_out[[count]] <- ggplot(data = plot_data, aes(x = scale_1, y = scale_2))+
-        geom_point() +
-        lims(x = xlim, y = ylim) + 
-        geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
-        labs(x = "", y = substitute(kappa[2]),  title = substitute(Y[j] ~ "|" ~ Y[i] > u[Y[i]], list(i = i, j = j))) +
-        theme(plot.title = element_text(size = 10))
-      count <- count + 1
-    }
-    else if(i == 5 & j == 3){
-      plot_data <- data.frame(scale_1 = scale_1_hat_Three_Step_Graph[[i]][,j],
-                              scale_2 = scale_2_hat_Three_Step_Graph[[i]][,j])
-      plot_out[[count]] <- ggplot(data = plot_data, aes(x = scale_1, y = scale_2))+
-        geom_point() +
-        lims(x = xlim, y = ylim) + 
-        geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
-        labs(x = substitute(kappa[1]), y = "",  title = substitute(Y[j] ~ "|" ~ Y[i] > u[Y[i]], list(i = i, j = j))) +
-        theme(plot.title = element_text(size = 10))
-      count <- count + 1
-    }
-    else{
-      plot_data <- data.frame(scale_1 = scale_1_hat_Three_Step_Graph[[i]][,j],
-                              scale_2 = scale_2_hat_Three_Step_Graph[[i]][,j])
-      plot_out[[count]] <- ggplot(data = plot_data, aes(x = scale_1, y = scale_2))+
-        geom_point() +
-        lims(x = xlim, y = ylim) + 
-        geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
-        labs(x = "", y = "", title = substitute(Y[j] ~ "|" ~ Y[i] > u[Y[i]], list(i = i, j = j))) +
-        theme(plot.title = element_text(size = 10))
-      count <- count + 1
-    }
-  }
-}
+scale_plot_data <- data.frame(scale_1 = do.call(c, lapply(1:d, function(i){do.call(c, lapply(1:d, function(j){scale_1_hat_Three_Step_Graph[[i]][,j]}))})),
+                              scale_2 = do.call(c, lapply(1:d, function(i){do.call(c, lapply(1:d, function(j){scale_2_hat_Three_Step_Graph[[i]][,j]}))})),
+                              Conditioning_Variable = rep(1:d, each = n_sim*d),
+                              Dependent_Variable = rep(rep(1:d, each = n_sim), d))
 
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Scale_Comp.pdf", width = 15, height = 15)
-ggarrange(plotlist = plot_out, ncol = d, nrow = d)
-# dev.off()
+scale_plot_data$Conditioning_Variable <- factor(scale_plot_data$Conditioning_Variable, levels = 1:d, labels = sapply(1:d, function(k){substitute(i ~ "=" ~ j, list(j = k))}))
+scale_plot_data$Dependent_Variable <- factor(scale_plot_data$Dependent_Variable, levels = 1:d, labels = sapply(1:d, function(k){substitute(Y[j] ~ "|" ~ Y[i] > u[Y[i]], list(j = k))}))
+
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Scale_Comp.pdf", width = 15, height = 15)
+ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
+  labs(x = substitute(hat(kappa[1])), y = substitute(hat(kappa[2]))) + 
+  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
+dev.off()
 
 # Shape
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Shape.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Shape.pdf", width = 15, height = 10)
 boxplot_MLEs(
   data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
     cbind(shape_hat_One_Step_Graph[[i]][,j],
           shape_hat_Two_Step_Graph[[i]][,j],
           shape_hat_Three_Step_Indep[[i]][,j])}))}),
   methods = method_vec, y_lab = y_lab[6])
-# dev.off()
+dev.off()
 
 method_vec <- c("One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 p <- length(which(lower_tri_elements))
 
-# pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Par_Ests/Gamma.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Gamma.pdf", width = 15, height = 10)
 boxplot_MLEs_Cov_Mat_Bias(
   data = lapply(1:d, function(i){
     list(Gamma_hat_One_Step_Graph[[i]],
@@ -595,9 +588,8 @@ boxplot_MLEs_Cov_Mat_Bias(
          Gamma_hat_Three_Step_Indep[[i]],
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
-  methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)), cov_mat_true = rho_true, precision = TRUE)
-
-# dev.off()
+  methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)[~ "|" ~ i]), cov_mat_true = rho_true, precision = TRUE)
+dev.off()
 
 ################################################################################
 ## Now get prediction from the models
