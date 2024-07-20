@@ -157,42 +157,44 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
   
   ## Get the conditioning sites
   cond_sites <- sample(x = 1:d, size = n_sim, replace = TRUE)
+  cond_sites_unique <- sort(unique(cond_sites))
+  n_cond_sites <- as.numeric(table(cond_sites))
   ## Convert the threshold onto Laplace margins and simulate from the conditioning site
   v <- qlaplace(q)
   large_Laplace <- v +  rexp(n = n_sim, rate = 1)
   ## Simulate residuals from the fitted model
-  Z <- t(mcmapply(FUN = rmvagg,
-                  loc = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[3,]}),
-                  scale_1 = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[4,]}),
-                  scale_2 = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[5,]}),
-                  shape = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[6,]}),
-                  Gamma = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$Gamma}),
-                  MoreArgs = list(n = 1),
-                  SIMPLIFY = TRUE,
-                  mc.cores = detectCores() - 1))
+  Z <- mcmapply(FUN = rmvagg,
+                loc = lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[3,]}),
+                scale_1 = lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[4,]}),
+                scale_2 = lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[5,]}),
+                shape = lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[6,]}),
+                Gamma = lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$Gamma}),
+                n = n_cond_sites,
+                SIMPLIFY = FALSE,
+                mc.cores = detectCores() - 1)
   ## Convert the simulated data onto Laplace margins
-  a_cond_sites <- t(sapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[1,]}))
-  b_cond_sites <- t(sapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[2,]}))
-  Laplace_Samples <- matrix(NA, nrow = n_sim, ncol = d-1)
-  for(i in 1:(d-1)){
-    Laplace_Samples[,i] <- a_cond_sites[,i]*large_Laplace + (large_Laplace^(b_cond_sites[,i]))*Z[,i]
-  }
-  ## Now combine Y{-i}|Y_{i} > u_{Y_{i}} and Y{-i}|Y_{i} > u_{Y_{i}}
-  Laplace_Samples_Full <- matrix(NA, nrow = n_sim, ncol = d)
-  for(i in 1:n_sim){
-    r <- cond_sites[i]
-    Laplace_Samples_Full[i,r] <- large_Laplace[i]
-    if(r == 1){
-      Laplace_Samples_Full[i,-1] <- Laplace_Samples[i,]
+  a_cond_sites <- lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[1,]})
+  b_cond_sites <- lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[2,]})
+  
+  Laplace_Samples <- vector("list", d)
+  for(i in 1:d){
+    large_Laplace_cond <- large_Laplace[cond_sites == i]
+    Y_Yi_large <- sapply(a_cond_sites[[i]], function(a){a*large_Laplace_cond}) + 
+      sapply(b_cond_sites[[i]], function(b){large_Laplace_cond^b})*Z[[i]]
+    
+    ## Now combine Y{-i}|Y_{i} > u_{Y_{i}} and Y{-i}|Y_{i} > u_{Y_{i}}
+    if(i == 1){
+      Laplace_Samples[[i]] <- cbind(large_Laplace_cond, Y_Yi_large)
     }
-    else if(r == d){
-      Laplace_Samples_Full[i,-d] <- Laplace_Samples[i,]
+    else if(i == d){
+      Laplace_Samples[[i]] <- cbind(Y_Yi_large, large_Laplace_cond)
     }
     else{
-      Laplace_Samples_Full[i,(1:(r-1))] <- Laplace_Samples[i,(1:(r-1))]
-      Laplace_Samples_Full[i,((r+1):d)] <- Laplace_Samples[i,(r:(d-1))]
+      Laplace_Samples[[i]] <- cbind(Y_Yi_large[,1:(i-1)], large_Laplace_cond, Y_Yi_large[,i:(d-1)])
     }
   }
+  Laplace_Samples_Full <- do.call(rbind, Laplace_Samples)
+  
   ## Now use importance sampling to resample the simulated data
   ## Idea is to up-weight those close to the boundary and down-weight those in the
   ## centre of the spatial process
