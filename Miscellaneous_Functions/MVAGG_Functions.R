@@ -153,37 +153,45 @@ fit_agg <- function(par, data){
 ## Functions for the multivariate AGG using a Gaussian Copula
 
 ## Probability density function
-dmvagg <- function(data, loc, scale_1, scale_2, shape, log = FALSE){
+dmvagg <- function(data, loc, scale_1, scale_2, shape, Gamma, log = FALSE){
   
   ## check data is in correct format
   if(!is.matrix(data)){stop("data must be a matrix")}
-  
   #extract info from data
   n <- dim(data)[1]
   d <- dim(data)[2]
   
   ## checks on the inputs
-  if(length(loc) != d | length(scale_1) != d | length(scale_2) != d | length(shape) != d){
+  if(!is.numeric(loc) | !is.numeric(scale_1) | !is.numeric(scale_2) | !is.numeric(shape)){
+    stop("parameters must be vectors")
+  }
+  else if(length(loc) != d | length(scale_1) != d | length(scale_2) != d | length(shape) != d){
     stop("parameters need to have the same dimension of data")
   }
   else if(any(scale_1 <= 0) | any(scale_2 <= 0) | any(shape <= 0)){
     stop("Invalid parameters provided")
   }
-  else{
-    ## calculate the density
-    l_f_z <- sapply(1:d, function(i){dagg(x = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i], log = TRUE)})
-    
-    Q_F_z <- sapply(1:d, function(i){qnorm(pagg(q = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i]))})
-    Gamma <- as(solve(cor(Q_F_z)), "sparseMatrix")
-    l_mvnorm <- dmvn.sparse(x = Q_F_z, mu = rep(0, d), CH = Cholesky(Gamma), log = TRUE)
-    l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
-    
-    z <- l_mvnorm + apply((l_f_z - l_dnorm), 1, sum)
-    if(!log){
-      z <- exp(z)
+  if(!missing(Gamma)){
+    if(!(class(Gamma) != "dgCMatrix" | class(Gamma) != "dsCMatrix")){
+      stop("Gamma must be sparseMatrix")
     }
-    return(z)
   }
+  
+  l_f_z <- sapply(1:d, function(i){dagg(x = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i], log = TRUE)})
+  
+  Q_F_z <- sapply(1:d, function(i){qnorm(pagg(q = data[,i], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i]))})
+  if(missing(Gamma)){
+    warning("No precision matrix has been provided. The empirical precision matrix will be used")
+    Gamma <- as(solve(cor(Q_F_z)), "sparseMatrix") 
+  }
+  l_mvnorm <- dmvn.sparse(x = Q_F_z, mu = rep(0, d), CH = Cholesky(Gamma), log = TRUE)
+  l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
+  
+  z <- l_mvnorm + apply((l_f_z - l_dnorm), 1, sum)
+  if(!log){
+    z <- exp(z)
+  }
+  return(z)
 }
 
 ## Random generation
@@ -205,8 +213,8 @@ rmvagg <- function(n, loc, scale_1, scale_2, shape, Gamma){
     if(length(scale_2) == 1){scale_2 <- rep(scale_2, d)}
     if(length(shape) == 1){shape <- rep(shape, d)}
     
-    p <- apply(sparseMVN::rmvn.sparse(n = n, mu = rep(0, d), CH = Cholesky(Gamma)), 1, pnorm)
-    z <- sapply(1:d, function(i){qaggd(p = p[i,], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
+    p <- apply(rmvn.sparse(n = n, mu = rep(0, d), CH = Cholesky(Gamma)), 1, pnorm)
+    z <- sapply(1:d, function(i){qagg(p = p[i,], loc = loc[i], scale_1 = scale_1[i], scale_2 = scale_2[i], shape = shape[i])})
     return(z)
   }
 }

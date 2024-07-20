@@ -5,7 +5,7 @@ t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
 ## Reading in required scripts
-source("MVAGG_Functions.R")
+source("Miscellaneous_Functions/MVAGG_Functions.R")
 
 ################################################################################
 ## Simulation of the spatial process
@@ -25,7 +25,7 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
     stop("lengths of transforms and CMEVM_fits do not match")
   }
   
-  ## Get some infromation on the data now
+  ## Get some information on the data now
   d <- length(transforms)
   if(d == 1){
     stop("The dimension (length of transfoms) must be at least 2")
@@ -161,7 +161,7 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
   v <- qlaplace(q)
   large_Laplace <- v +  rexp(n = n_sim, rate = 1)
   ## Simulate residuals from the fitted model
-  Z <- t(mcmapply(FUN = rmvagg_new,
+  Z <- t(mcmapply(FUN = rmvagg,
                   loc = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[3,]}),
                   scale_1 = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[4,]}),
                   scale_2 = lapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[5,]}),
@@ -170,7 +170,6 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
                   MoreArgs = list(n = 1),
                   SIMPLIFY = TRUE,
                   mc.cores = detectCores() - 1))
-  return(Z)
   ## Convert the simulated data onto Laplace margins
   a_cond_sites <- t(sapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[1,]}))
   b_cond_sites <- t(sapply(cond_sites, function(i){CMEVM_fits[[i]]$par$main[2,]}))

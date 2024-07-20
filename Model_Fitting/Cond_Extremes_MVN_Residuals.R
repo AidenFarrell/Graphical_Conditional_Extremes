@@ -1,7 +1,7 @@
 ## Functions to fit the CMEVM when we assume that the residuals are multivariate Gaussian
 ## with some graphical structure
 Cond_Extremes_MVN <- function(data, cond, graph = NA, 
-                              constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
+                              constrain = TRUE, q = c(0,1), v = 20, aLow = -1, 
                               maxit = 1e+6, start = c(0.1, 0.1), nOptim = 1){
   
   #get information from the data
@@ -263,13 +263,14 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
                    yex = yex, ydep = ydep, negative = TRUE,
                    constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
              silent = TRUE)
+  n <- length(yex)
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
-    out$Z <- NA
+    out$Z <- matrix(NA, nrow = n, ncol = 1)
   }
   else if(fit$convergence != 0 | fit$value == 1e+10){
     warning("Non-convergence in Cond_Extremes_MVN")
@@ -277,7 +278,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
-    out$Z <- NA
+    out$Z <- matrix(NA, nrow = n, ncol = 1)
   }
   else if(nOptim > 1){
     for(i in 2:nOptim){
@@ -293,7 +294,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
         out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
         out$convergence <- NA
-        out$Z <- NA
+        out$Z <- matrix(NA, nrow = n, ncol = 1)
       }
       else if(fit$convergence != 0 | fit$value == 1e+10){
         warning("Non-convergence in Cond_Extremes_MVN")
@@ -301,7 +302,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
         out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
         out$value <- NA
         out$convergence <- NA
-        out$Z <- NA
+        out$Z <- matrix(NA, nrow = n, ncol = 1)
       }
     }
   }
@@ -328,7 +329,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
     out$value <- NA
     out$convergence <- NA
-    out$Z <- NA
+    out$Z <- matrix(NA, nrow = n, ncol = 1)
   }
   class(out) <- "Cond_Extremes_MVN"
   return(out)

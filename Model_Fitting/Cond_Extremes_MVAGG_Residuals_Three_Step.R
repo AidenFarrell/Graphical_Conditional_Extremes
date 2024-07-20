@@ -1,12 +1,47 @@
 ################################################################################
-## Reading in required scripts
-source("MVAGG_Functions.R")
-source("Cond_Extremes_MVN_Residuals.R")
+## Reading in required packages
+required_pckgs <- c("glasso")
+t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
+## Reading in required scripts
+source("Miscellaneous_Functions/MVAGG_Functions.R")
+source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 
+################################################################################
+## Function to calculate the log-likelihood of the model
+log_like_model <- function(fit, y){
+  if(class(fit) != "Cond_Extremes_MVAGG"){
+    stop("fit must be of class Cond_Extremes_MVAGG")
+  }
+  if(!is.numeric(y)){
+    stop("y must be a vector")
+  }
+  ## Extract the output
+  b <- fit$par$main[2,]
+  loc <- fit$par$main[3,]
+  scale_1 <- fit$par$main[4,]
+  scale_2 <- fit$par$main[5,]
+  shape <- fit$par$main[6,]
+  Gamma <- fit$par$Gamma
+  Z <- fit$Z
+  
+  ## Part 1
+  ll_1 <- sum(dmvagg(data = Z, loc = loc, scale_1 = scale_1, scale_2 = scale_2,
+                     shape = shape, Gamma = Gamma, log = TRUE))
+  
+  ## Part 2
+  ll_2 <- sum(sapply(b, function(x){x*log(y)}))
+  
+  ## Full log-likelihood
+  llh <- ll_1 - ll_2
+  return(llh)
+}
+
+## Function to fit the CMEVM assuming the residuals follow a MVAGG
+## Use the three-step method here
 Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
-                                            constrain = TRUE, q = c(0,1), v = 10, aLow = -1, 
+                                            constrain = TRUE, q = c(0,1), v = 20, aLow = -1, 
                                             maxit = 1e+6, nOptim = 1,
                                             start_HT, start_AGG){
   
@@ -80,7 +115,6 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
     out <- list()
     out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
     out$Z <- matrix(NA, nrow = n, ncol = d)
-    out$value <- NA
     out$convergence <- NA
   }
   else{
@@ -104,7 +138,6 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
       out <- list()
       out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
       out$Z <- matrix(NA, nrow = n, ncol = d)
-      out$value <- NA
       out$convergence <- NA
     }
     else{
@@ -133,15 +166,24 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
         all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
         non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
         
-        if(is_empty(non_edges)){
+        if(nrow(non_edges) == 0){
           out$par$Gamma <- as(solve(cor(Z_Gaussian)), "sparseMatrix")
         }
         else{
           ## Use a graphical model
           ## Determine the missing edges in the graph
-          fit_glasso <- suppressWarnings(glasso(s = cor(Z_Gaussian), rho = 0, nobs = n,
-                                                zero = non_edges, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)) 
-          out$par$Gamma <- as(fit_glasso$wi, "sparseMatrix")
+          fit_glasso <- try(suppressWarnings(glasso(s = cor(Z_Gaussian), rho = 0, nobs = n,
+                                                    zero = non_edges, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)), silent = TRUE)
+          if(inherits(fit_glasso, "try-error")){
+            warning("glasso will not fit for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
+            out <- list()
+            out$par <- list(loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+            out$Z <- matrix(NA, nrow = n, ncol = d)
+            out$convergence <- NA
+          }
+          else{
+            out$par$Gamma <- as(fit_glasso$wi, "sparseMatrix") 
+          }
         }
       }
       
@@ -158,6 +200,12 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
       out$convergence <- max(sapply(res_HT, function(x){x$convergence}),
                              sapply(res_AGG, function(x){x$convergence}))  
       class(out) <- "Cond_Extremes_MVAGG"
+      if(any(is.na(out$par$main))){
+        out$loglike <- NA
+      }
+      else{
+        out$loglike <- log_like_model(out, y = yex) 
+      }
       return(out)
     }
   }
