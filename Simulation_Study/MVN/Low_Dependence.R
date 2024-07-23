@@ -753,34 +753,8 @@ for(i in 1:d){
 method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
                 "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
-p <- d
-# Colour blind friendly pallete:
-cbbPalette <- c(c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"),
-                palette.colors(palette = "Dark 2"))
-cols <- c(cbbPalette[1:length(method_vec)])
-
-for(i in 1:1){
-  for(j in 1:length(uncon[[1]])){
-    ymin = floor(min(p_comp[[i]][[j]])/0.1)*0.1
-    ymax = ceiling(max(p_comp[[i]][[j]])/0.1)*0.1
-    ymin = -(max(abs(ymin), ymax))
-    ymax = max(abs(ymin), ymax)
-    par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
-    boxplot(x = p_comp[[i]][[j]],
-            col = cols,
-            xaxt = 'n',
-            ylab = "Probability",
-            main = plot_titles[[i]][[j]],
-            ylim = c(-0.1, ymax))
-    legend("topright", inset = 0.02, title = "Model", legend = method_vec, fill = cols, cex = 1, ncol = 3) 
-    # abline(h = 0, col = 2, lty = 2, lwd = 3)
-  }
-}
-# very little bias coming through in all examples
-
 method_vec_1 <- method_vec[-1]
-cols_1 <- cols[-1]
-for(i in 1:1){
+for(i in 1:d){
   for(j in 1:length(uncon[[1]])){
     ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
     ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
@@ -789,7 +763,7 @@ for(i in 1:1){
     data_to_plot$Model = rep(method_vec_1, each = n_sim)
     data_to_plot$Model <- factor(data_to_plot$Model, levels = method_vec_1)
     
-    # pdf(paste0("/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Probs/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
+    pdf(paste0("Images/Simulation_Study/MVN/Low_Dependence/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
       lims(y = c(ymin, ymax)) +
@@ -805,10 +779,9 @@ for(i in 1:1){
             axis.ticks.x = element_blank()) +
       geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
     print(p_plot)
-    # dev.off()
+    dev.off()
   }
 }
-
 
 ## Summary output from the model
 
@@ -854,9 +827,9 @@ cond_serv_curve_data <- function(data, u_cond, u_dep, cond_var, dep_var){
   u_cond_dep <- lapply(apply(cbind(rep(u_cond, length(u_dep)), u_dep), 1, list), function(x){x[[1]]})
   data_cond_dep <- data[,c(cond_var, dep_var)]
   
-  cond_serv_out <- mcmapply(FUN = p_data_surv_multi_new,
+  cond_serv_out <- mcmapply(FUN = p_data_surv_multi,
                             u = u_cond_dep,
-                            MoreArgs = list(x = data_cond_dep, cond = 1, uncon = 2),
+                            MoreArgs = list(data = data_cond_dep, cond = 1, uncon = 2),
                             SIMPLIFY = TRUE,
                             mc.cores = detectCores() - 1)
   return(cond_serv_out)
@@ -874,8 +847,8 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
   
   ## get the conditional survival function
   cond_serv_out <- t(sapply(u_cond_dep, function(u){
-    mcmapply(FUN = p_data_surv_multi_new,
-             x = data_cond_dep,
+    mcmapply(FUN = p_data_surv_multi,
+             data = data_cond_dep,
              MoreArgs = list(cond = 1, u = u, uncon = 2),
              SIMPLIFY = TRUE,
              mc.cores = detectCores() - 1)}))
@@ -923,45 +896,7 @@ surv_Three_Step <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
 surv_data <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_data(data = X_prob_calc, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
 
-## Get a nice ggplot with the output
-cond_surve_plots <- list()
-count <- 1
-for(i in 1:d){
-  for(j in 1:d){
-    if(i == j){
-      cond_surve_plots[[count]] <- ggplot() + theme_void()
-      count <- count + 1
-    }
-    else if(i < j){
-      cond_surve_plots[[count]] <- 
-        cond_surv_curve_plot(p_true = surv_data[[i]][[j-1]],
-                             p_model = list(surv_EH[[i]][[j-1]], 
-                                            surv_Three_Step[[i]][[j-1]]),
-                             u_dep = u_dep[[j]], sig_level = 0.05,
-                             methods = c("Engelke & Hitz", "Three-step - Graphical"),
-                             x_lab = substitute(u[j], list(j = j)), y_lab = "Bias",
-                             title_lab = substitute(P ~ "(" ~ X[j] > u[j] ~ "|" ~ X[i] > u[i] ~ ")",
-                                                    list(i = i, j = j)))
-      count <- count + 1
-    }
-    else{
-      cond_surve_plots[[count]] <- 
-        cond_surv_curve_plot(p_true = surv_data[[i]][[j]],
-                             p_model = list(surv_EH[[i]][[j]], 
-                                            surv_Three_Step[[i]][[j]]),
-                             u_dep = u_dep[[j]], sig_level = 0.05,
-                             methods = c("Engelke & Hitz", "Three-step - Graphical"),
-                             x_lab = substitute(u[j], list(j = j)), y_lab = "Bias",
-                             title_lab = substitute(P ~ "(" ~ X[j] > u[j] ~ "|" ~ X[i] > u[i] ~ ")",
-                                                    list(i = i, j = j)))
-      count <- count + 1
-    }
-  }
-}
-ggarrange(plotlist = cond_surve_plots, nrow = d, ncol = d)
-
-
-## get a different ggplot
+## get a ggplot of the bias
 ## Let us only focus on Y1 being large first
 bias_EH <- bias_Three_Step <- rep(list(vector("list", d)), d)
 for(i in 1:d){
@@ -1027,7 +962,7 @@ label_x <- function(labels) {
 
 # Create the ggplot
 par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
-pdf(file = "/Users/aidenfarrell/Library/CloudStorage/OneDrive-LancasterUniversity/PhD/Project_2/Code_for_Paper/Images/Section_4_2_1/Probs/MVN_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
