@@ -1,6 +1,6 @@
 ################################################################################
 ## Reading in required packages
-required_pckgs <- c("glasso")
+required_pckgs <- c("glasso", "Matrix", "matrixcalc", "sparseMVN")
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
@@ -163,10 +163,8 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
       graph_cond <- delete_vertices(graph, cond)
       
       ## check if the graph is full, if so fit then model instantly
-      all_edges <- as.data.frame(combinations(n = d-1, r = 2, v = 1:(d-1)))
-      g_edges <- as.data.frame(as_edgelist(graph_cond))
-      n_edges_full <- nrow(all_edges)
-      n_edges_graph_cond <- nrow(g_edges)
+      n_edges_full <- (d-1)*(d-2)/2
+      n_edges_graph_cond <- length(E(graph_cond))
       
       if(n_edges_full == n_edges_graph_cond){
         ## Fit the saturated model
@@ -194,6 +192,8 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
         if(is_connected(graph_cond)){
           ## If the graph is connected use the graphical model
           ## determine the edges in the conditional graph
+          all_edges <- as.data.frame(combinations(n = d-1, r = 2, v = 1:(d-1)))
+          g_edges <- as.data.frame(as_edgelist(graph_cond))
           all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
           non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
           
@@ -380,12 +380,11 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
     else{
       ## Transform them onto standard Gaussian margins
       Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
-      Sigma_start <- cor(Q_F_z)
-      if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z)) |
-         any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+      if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z))){
         return((-10^10)*(-1)^negative)
       }
-      else if(any(diag(Sigma_start) <= 0) | any(eigen(Sigma_start)$values <= 0)){
+      Sigma_start <- cor(Q_F_z)
+      if(!is.positive.definite(Sigma_start)){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -393,10 +392,8 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
         l_f_z <- sapply(1:d, function(i){dagg(x = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
         l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
         
-        Lasso_est <- suppressWarnings(glasso(s = Sigma_start, rho = 0, penalize.diagonal = FALSE, thr = 1e-9, zero = Gamma_zero))
-        chol_Gamma <- chol(Lasso_est$wi)
-        y <- chol_Gamma%*%t(Q_F_z)
-        l_mvnorm <- -n*d*log(2*pi)/2 - n*sum(log(1/diag(chol_Gamma))) - sum(y^2)/2
+        Lasso_est <- suppressWarnings(glasso(s = Sigma_start, rho = 0, thr = 1e-9, zero = Gamma_zero))
+        l_mvnorm <- sum(dmvn.sparse(x = Q_F_z, mu = rep(0,d), CH = Cholesky(as(Lasso_est$wi, "sparseMatrix")), log = TRUE))
         
         res <- l_mvnorm + sum(l_f_z) - sum(l_dnorm)
         
@@ -442,7 +439,7 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
     
     ## Extract MLE of Gamma
     Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
-    Lasso_est <- try(suppressWarnings(glasso(s = cor(Q_F_z), rho = 0, penalize.diagonal = FALSE, thr = 1e-9, zero = Gamma_zero)), silent = TRUE)
+    Lasso_est <- try(suppressWarnings(glasso(s = cor(Q_F_z), rho = 0, thr = 1e-9, zero = Gamma_zero)), silent = TRUE)
     if(inherits(Lasso_est, "try-error")){
       warning("glasso will not fit for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
       out <- list()
@@ -487,24 +484,18 @@ qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
     else{
       ## Transform them onto standard Gaussian margins
       Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i]))}))
-      Sigma_start <- cor(Q_F_z)
-      if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z)) |
-         any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+      if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z))){
         return((-10^10)*(-1)^negative)
       }
-      else if(any(diag(Sigma_start) <= 0) | any(eigen(Sigma_start)$values <= 0)){
+      Sigma_start <- cor(Q_F_z)
+      if(!is.positive.definite(Sigma_start)){
         return((-10^10)*(-1)^negative)
       }
       else{
         ## Calculate the log likelihood function
         l_f_z <- sapply(1:d, function(i){dagg(x = c(z[,i]), loc = mu[i], scale_1 = sigma_1[i], scale_2 = sigma_2[i], shape = shape[i], log = TRUE)})
         l_dnorm <- sapply(1:d, function(i){dnorm(Q_F_z[,i], log = TRUE)})
-        
-        # Lasso_est <- suppressWarnings(glasso(s = Sigma_start, rho = 0, penalize.diagonal = FALSE, thr = 1e-9))
-        # chol_Gamma <- chol(Lasso_est$wi)
-        chol_Gamma <- chol(solve(Sigma_start))
-        y <- chol_Gamma%*%t(Q_F_z)
-        l_mvnorm <- -n*d*log(2*pi)/2 - n*sum(log(1/diag(chol_Gamma))) - sum(y^2)/2
+        l_mvnorm <- sum(dmvn.sparse(x = Q_F_z, mu = rep(0,d), CH = Cholesky(as(solve(Sigma_start), "sparseMatrix")), log = TRUE))
         
         res <- l_mvnorm + sum(l_f_z) - sum(l_dnorm)
         

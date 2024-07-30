@@ -41,9 +41,9 @@ log_like_model <- function(fit, y){
 ## Function to fit the CMEVM assuming the residuals follow a MVAGG
 ## Use the three-step method here
 Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
-                                            constrain = TRUE, q = c(0,1), v = 20, aLow = -1, 
-                                            maxit = 1e+6, nOptim = 1,
-                                            start_HT, start_AGG){
+                                           constrain = TRUE, q = c(0,1), v = 20, aLow = -1, 
+                                           maxit = 1e+6, nOptim = 1,
+                                           start_HT, start_AGG){
   
   ## Obtain information from the data
   dim_data <- dim(data)
@@ -161,19 +161,24 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
         graph_cond <- delete_vertices(graph, cond)
         
         ## check if the graph is full to determine the model
-        all_edges <- as.data.frame(combinations(n = d-1, r = 2, v = 1:(d-1)))
-        g_edges <- as.data.frame(as_edgelist(graph_cond))
-        all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
-        non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
+        n_edges_full <- (d-1)*(d-2)/2
+        n_edges <- length(E(graph_cond))
         
-        if(nrow(non_edges) == 0){
+        if(n_edges == n_edges_full){
           out$par$Gamma <- as(solve(cor(Z_Gaussian)), "sparseMatrix")
         }
         else{
           ## Use a graphical model
+          
           ## Determine the missing edges in the graph
+          all_edges <- as.data.frame(combinations(n = d-1, r = 2, v = 1:(d-1)))
+          g_edges <- as.data.frame(as_edgelist(graph_cond))
+          all_edges$exists <- do.call(paste0, all_edges) %in% do.call(paste0, g_edges)
+          non_edges <- as.matrix(all_edges[which(all_edges$exists == FALSE), 1:2])
+          
+          ## Fit the graphical model
           fit_glasso <- try(suppressWarnings(glasso(s = cor(Z_Gaussian), rho = 0, nobs = n,
-                                                    zero = non_edges, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)), silent = TRUE)
+                                                    zero = non_edges, thr = 1e-8, maxit = 1e+6)), silent = TRUE)
           if(inherits(fit_glasso, "try-error")){
             warning("glasso will not fit for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
             out <- list()
