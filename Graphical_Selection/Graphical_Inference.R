@@ -167,7 +167,7 @@ Plot_Graph_From_Adjacency_Matrix <- function(Adj_Matrix, n_sim = 1, layout, true
   if(is_igraph(true_graph)){
     edges_df <- as.data.frame(edges)
     ## Get the true edges from the true graph and reorder them too
-    true_edges <- which(as.matrix(as_adjacency_matrix(tree_sim))*upper_tri_elements > 0, arr.ind = TRUE)
+    true_edges <- which(as.matrix(as_adjacency_matrix(true_graph))*upper_tri_elements > 0, arr.ind = TRUE)
     true_edges <- true_edges[order(true_edges[,1]),]
     true_edges <- as.data.frame(true_edges)
     
@@ -178,9 +178,9 @@ Plot_Graph_From_Adjacency_Matrix <- function(Adj_Matrix, n_sim = 1, layout, true
     E(g_out)$color <- edges_df$colour
     
     ## plot the graph
-    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight)
+    plot(g_out, layout = layout, edge.width = 1*E(g_out)$weight)
   }
   else{
-    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight, edge.color = "grey") 
+    plot(g_out, layout = layout, edge.width = 1*E(g_out)$weight, edge.color = "grey") 
   }
 }
