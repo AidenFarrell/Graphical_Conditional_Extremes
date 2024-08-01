@@ -54,7 +54,13 @@ comp_plots <- function(data, methods, y_lab, ylims, par_true){
     scale_pattern_manual(values = c("250" = "none", "500" = "stripe")) +
     guides(pattern = guide_legend(override.aes = list(fill = "white")),
            fill = guide_legend(override.aes = list(pattern = "none"))) +
-    theme(legend.position = "top") +
+    theme(legend.position = "top",
+          legend.box = "horizontal",
+          legend.box.just = "center",
+          legend.spacing.x = unit(0.5, 'cm'),
+          legend.spacing.y = unit(0.5, 'cm'),
+          legend.margin = margin(0, 0, 0, 0),
+          legend.box.margin = margin(0, 0, 0, 0)) +
     lims(y = ylims) +
     labs(x = "Dependent Variable (j)", y = y_lab, pattern = "Number of Excesses") +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
@@ -121,7 +127,13 @@ comp_plots_matrix <- function(data, methods, y_lab, ylims, cov_mat_true, precisi
     scale_pattern_manual(values = c("250" = "none", "500" = "stripe")) +
     guides(pattern = guide_legend(override.aes = list(fill = "white")),
            fill = guide_legend(override.aes = list(pattern = "none"))) +
-    theme(legend.position = "top") +
+    theme(legend.position = "top",
+          legend.box = "horizontal",
+          legend.box.just = "center",
+          legend.spacing.x = unit(0.5, 'cm'),
+          legend.spacing.y = unit(0.5, 'cm'),
+          legend.margin = margin(0, 0, 0, 0),
+          legend.box.margin = margin(0, 0, 0, 0)) +
     lims(y = ylims) +
     labs(x = "Pair", y = y_lab, pattern = "Number of Excesses") +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
