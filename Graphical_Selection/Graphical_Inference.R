@@ -178,9 +178,9 @@ Plot_Graph_From_Adjacency_Matrix <- function(Adj_Matrix, n_sim = 1, layout, true
     E(g_out)$color <- edges_df$colour
     
     ## plot the graph
-    plot(g_out, layout = layout, edge.width = 1*E(g_out)$weight)
+    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight)
   }
   else{
-    plot(g_out, layout = layout, edge.width = 1*E(g_out)$weight, edge.color = "grey") 
+    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight, edge.color = "grey") 
   }
 }
