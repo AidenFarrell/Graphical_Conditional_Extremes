@@ -384,7 +384,7 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.definite(Sigma_start)){
+      if(!is.positive.semi.definite(Sigma_start)){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -488,7 +488,7 @@ qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.definite(Sigma_start)){
+      if(!is.positive.semi.definite(Sigma_start)){
         return((-10^10)*(-1)^negative)
       }
       else{
