@@ -368,7 +368,10 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.semi.definite(Sigma_start)){
+      if(any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+        return((-10^10)*(-1)^negative)
+      }
+      else if(min(eigen(Sigma_start)$values) < 0){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -400,6 +403,39 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
   ## Extract the output
   d <- ncol(ydep)
   n <- nrow(ydep)
+  if(nOptim > 1){
+    if(inherits(fit, "try-error")){
+      next()
+    }
+    else if(fit$convergence != 0 | fit$value == 1e+10){
+      next()
+    }
+    else{
+      for(i in 2:nOptim){
+        a_hat <- fit$par[1:d]
+        b_hat <- fit$par[(d + 1):(2*d)]
+        mu_hat <- fit$par[(2*d + 1):(3*d)]
+        sigma_1_hat <- fit$par[(3*d + 1):(4*d)]
+        sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
+        shape_hat <- fit$par[(5*d + 1):(6*d)]
+        start_par <- cbind(pmin(pmax(a_hat, 0.1), 0.5),
+                           pmin(pmax(b_hat, 0.1), 0.5), 
+                           mu_hat, sigma_1_hat, sigma_2_hat, shape_hat)
+        fit <- try(optim(par = c(start_par), fn = Qpos, yex = yex, ydep = ydep,
+                         control = list(maxit = maxit), Gamma_zero = Gamma_zero,
+                         negative = TRUE, method = "BFGS", hessian = FALSE),
+                   silent = FALSE)
+        
+        if(inherits(fit, "try-error")){
+          break()
+        }
+        else if(fit$convergence != 0 | fit$value == 1e+10){
+          break()
+        }
+      }
+    }
+  }
+  
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
@@ -416,44 +452,7 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     out$value <- NA
     out$convergence <- NA
   }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      a_hat <- fit$par[1:d]
-      b_hat <- fit$par[(d + 1):(2*d)]
-      mu_hat <- fit$par[(2*d + 1):(3*d)]
-      sigma_1_hat <- fit$par[(3*d + 1):(4*d)]
-      sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
-      shape_hat <- fit$par[(5*d + 1):(6*d)]
-      start_par <- cbind(pmin(pmax(a_hat, 0.1), 0.5),
-                         pmin(pmax(b_hat, 0.1), 0.5), 
-                         mu_hat, sigma_1_hat, sigma_2_hat, shape_hat)
-      fit <- try(optim(par = c(start_par), fn = Qpos, yex = yex, ydep = ydep,
-                       control = list(maxit = maxit), Gamma_zero = Gamma_zero,
-                       negative = TRUE, method = "BFGS", hessian = FALSE),
-                 silent = FALSE)
-      
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
-        out$Z <- matrix(NA, nrow = n, ncol = d)
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-      else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Non-convergence in Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
-        out$Z <- matrix(NA, nrow = n, ncol = d)
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-    }
-  }
-  
-  if(!is.na(fit$par[1])){
+  else if(!is.na(fit$par[1])){
     ## Extract MLEs from the model
     a_hat <- fit$par[1:d]
     b_hat <- fit$par[(d + 1):(2*d)]
@@ -527,7 +526,10 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.semi.definite(Sigma_start)){
+      if(any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+        return((-10^10)*(-1)^negative)
+      }
+      else if(min(eigen(Sigma_start)$values) < 0){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -557,10 +559,43 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
   ## Extract the output
   d <- ncol(ydep)
   n <- length(yex)
+  if(nOptim > 1){
+    if(inherits(fit, "try-error")){
+      next()
+    }
+    else if(fit$convergence != 0 | fit$value == 1e+10){
+      next()
+    }
+    else{
+      for(i in 2:nOptim){
+        a_hat <- fit$par[1:d]
+        b_hat <- fit$par[(d + 1):(2*d)]
+        mu_hat <- fit$par[(2*d + 1):(3*d)]
+        sigma_1_hat <- fit$par[(3*d + 1):(4*d)]
+        sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
+        shape_hat <- fit$par[(5*d + 1):(6*d)]
+        start_par <- cbind(pmin(pmax(a_hat, 0.1), 0.5),
+                           pmin(pmax(b_hat, 0.1), 0.5), 
+                           mu_hat, sigma_1_hat, sigma_2_hat, shape_hat)
+        fit <- try(optim(par = c(start_par), fn = Qpos, yex = yex, ydep = ydep,
+                         control = list(maxit = maxit),
+                         negative = TRUE, method = "BFGS", hessian = FALSE),
+                   silent = FALSE)
+        
+        if(inherits(fit, "try-error")){
+          break()
+        }
+        else if(fit$convergence != 0 | fit$value == 1e+10){
+          break()
+        }
+      } 
+    }
+  }
+  
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
-    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
     out$Z <- matrix(NA, nrow = n, ncol = d)
     out$value <- NA
     out$convergence <- NA
@@ -573,44 +608,7 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
     out$value <- NA
     out$convergence <- NA
   }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      a_hat <- fit$par[1:d]
-      b_hat <- fit$par[(d + 1):(2*d)]
-      mu_hat <- fit$par[(2*d + 1):(3*d)]
-      sigma_1_hat <- fit$par[(3*d + 1):(4*d)]
-      sigma_2_hat <- fit$par[(4*d + 1):(5*d)]
-      shape_hat <- fit$par[(5*d + 1):(6*d)]
-      start_par <- cbind(pmin(pmax(a_hat, 0.1), 0.5),
-                         pmin(pmax(b_hat, 0.1), 0.5), 
-                         mu_hat, sigma_1_hat, sigma_2_hat, shape_hat)
-      fit <- try(optim(par = c(start_par), fn = Qpos, yex = yex, ydep = ydep,
-                       control = list(maxit = maxit),
-                       negative = TRUE, method = "BFGS", hessian = FALSE),
-                 silent = FALSE)
-      
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
-        out$Z <- matrix(NA, nrow = n, ncol = d)
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-      else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Non-convergence in Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, nrow = d, ncol = d))
-        out$Z <- matrix(NA, nrow = n, ncol = d)
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-    }
-  }
-  
-  if(!is.na(fit$par[1])){
+  else if(!is.na(fit$par[1])){
     ## Extract MLEs from the model
     a_hat <- fit$par[1:d]
     b_hat <- fit$par[(d + 1):(2*d)]
