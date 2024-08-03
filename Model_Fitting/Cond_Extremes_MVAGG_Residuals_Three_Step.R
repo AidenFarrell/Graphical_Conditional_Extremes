@@ -211,7 +211,7 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
       else{
         out$loglike <- log_like_model(out, y = yex) 
       }
-      return(out)
     }
   }
+  return(out)
 }
