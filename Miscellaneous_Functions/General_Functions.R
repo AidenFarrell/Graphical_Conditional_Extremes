@@ -69,3 +69,13 @@ Add_NA_Matrix <- function(x, j){
   }
   return(y)
 }
+
+## Function to calculate the RMSE of a sample
+RMSE <- function(x, xhat){
+  (mean((x - xhat)^2))^(1/2)
+}
+
+## Function to calculate the mean absolute bias of a sample
+Bias <- function(x, xhat){
+  mean(abs(x - xhat))
+}
