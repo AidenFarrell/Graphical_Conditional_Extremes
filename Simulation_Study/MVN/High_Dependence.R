@@ -28,6 +28,27 @@ source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
 
 ################################################################################
+out <- readRDS("Data/MVN_Low_Dependence_D5.RData")
+
+g_true <- out$par_true$graph
+d <- length(V(g_true)) 
+n_sim <- out$par_true$n_sim
+n_data <- out$par_true$n_data
+
+## Transforms
+X_to_Y <- out$transforms
+
+## get the data
+X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+
+## Get the output from the GPD fits
+u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
+
+################################################################################
 ## plotting functions for later
 boxplot_MLEs <- function(data, methods, y_lab){
   
@@ -117,6 +138,8 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
 }
 
 ################################################################################
+## DO NOT RUN
+
 ## Set up the simulation study
 
 ## True graph
@@ -148,7 +171,6 @@ mu_true <- runif(d, -5, 5)
 ## number of simulations and data points
 n_sim <- 200
 n_data <- 5000
-dqu <- 0.9
 n_exceedances <- 500
 
 ## Simulate the data
@@ -174,7 +196,10 @@ scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y})})
 
+################################################################################
+
 ## Now we want to subset the data so that each component is large in turn
+dqu <- 0.9
 Y_u <- lapply(Y, function(x){apply(x, 2, quantile, probs = dqu)})
 Y_u <- qlaplace(dqu)
 
@@ -913,9 +938,9 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
 dev.off()
 
 ################################################################################
-# out <- list(transformations = X_to_Y,
-#             par_true = list(mean = mu_true, Gamma = Gamma_true, graph = g_true,
-#                             n_sim = n_sim, n_data = n_data, dqu = dqu))
-# 
-# saveRDS(out, file = "Data/MVN_D5_High_Dependence.RData")
+# out <- list(transforms = X_to_Y,
+#             par_true = list(n_sim = n_sim, n_data = n_data,
+#                             mu = mu_true, Gamma = Gamma_true, graph = g_true))
+# saveRDS(out, file = "Data/MVN_High_Dependence_D5.RData")
 ################################################################################
+

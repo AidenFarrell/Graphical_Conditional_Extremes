@@ -28,12 +28,12 @@ source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
 
 ################################################################################
-out <- readRDS("/Users/aidenfarrell/Documents/MVN_Low_Dependence_D5.RData")
+out <- readRDS("Data/MVN_Low_Dependence_D5.RData")
 
-d <- length(out$transforms) 
-n_sim <- length(out$transforms[[1]])
-n_data <- length(out$transforms[[1]][[1]]$data$X)
-dqu = out$par_true$dqu
+g_true <- out$par_true$graph
+d <- length(V(g_true)) 
+n_sim <- out$par_true$n_sim
+n_data <- out$par_true$n_data
 
 ## Transforms
 X_to_Y <- out$transforms
@@ -47,14 +47,6 @@ u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transf
 qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
 scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
-
-fit_HT <- out$CMEVM_fits$HT
-fit_EH <- out$CMEVM_fits$EH
-fit_One_Step_Graph <- out$CMEVM_fits$One_Step_Graph
-fit_Two_Step_Graph <- out$CMEVM_fits$Two_Step_Graph
-fit_Three_Step_Indep <- out$CMEVM_fits$Three_Step_Indep
-fit_Three_Step_Graph <- out$CMEVM_fits$Three_Step_Graph
-fit_Three_Step_Full <- out$CMEVM_fits$Three_Step_Full
 
 ################################################################################
 ## plotting functions for later
@@ -146,6 +138,8 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
 }
 
 ################################################################################
+## DO NOT RUN
+
 ## Set up the simulation study
 
 ## True graph
@@ -177,7 +171,6 @@ mu_true <- runif(d, -5, 5)
 ## number of simulations and data points
 n_sim <- 200
 n_data <- 5000
-dqu <- 0.9
 n_exceedances <- 500
 
 ## Simulate the data
@@ -203,7 +196,10 @@ scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y})})
 
+################################################################################
+
 ## Now we want to subset the data so that each component is large in turn
+dqu <- 0.9
 Y_u <- lapply(Y, function(x){apply(x, 2, quantile, probs = dqu)})
 Y_u <- qlaplace(dqu)
 
@@ -942,4 +938,12 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
     )
   )
 dev.off()
+
+################################################################################
+# out <- list(transforms = X_to_Y,
+#             par_true = list(n_sim = n_sim, n_data = n_data, 
+#                             mu = mu_true, Gamma = Gamma_true, graph = g_true))
+# saveRDS(out, file = "Data/MVN_Low_Dependence_D5.RData")
+################################################################################
+
 
