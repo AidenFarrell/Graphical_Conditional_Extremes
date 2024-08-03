@@ -1,171 +1,212 @@
 ################################################################################
-#Load in required packages
-rm(list = ls())
-required_pckgs <- c("fake", "glasso", "graphicalExtremes", "gridExtra", "gtools", "igraph", "jmuOutlier", "LaplacesDemon", "matrixcalc", "mev", "moments", "rgl", "rlang", "parallel", "pracma", "purrr", "texmex")
-# install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
+## Adding required packages
+required_pckgs <- c("glasso", "gtools", "igraph", "rlang")
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
-## Set working directory
-setwd("/Users/aidenfarrell/Documents/GitHub/Graphical_Conditional_Extremes/")
-
-## Reading in required functions
-source("Cond_Extremes_MVAGG_Residuals.R")
-source("General_Functions.R")
-source("MVAGG_Functions.R")
-source("/Graphical_Selection/Graphical_Inference.R")
-
-## read in threshold selection functions
-source("threshold_selection_paper/helper_functions.R")
-source("threshold_selection_paper/thresh_qq_metric.R")
+## Reading in required scripts
+source("Miscellaneous_Functions/MVAGG_Functions.R")
+source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
 
 ################################################################################
 
-## Create data for the simulation study
-
-## True graph
-nv <- d <- 16
-connections <- diag(0, nrow = nv)
-connections[2:6,1] <- connections[1,2:6] <- 1
-connections[c(3,7,8),2] <- connections[2,c(3,7,8)] <- 1
-connections[c(2,9,10),3] <- connections[3,c(2,9,10)] <- 1
-connections[c(11,12),4] <- connections[4,c(11,12)] <- 1
-connections[c(13,14),5] <- connections[5,c(13,14)] <- 1
-connections[c(15,16),6] <- connections[6,c(15,16)] <- 1
-connections[8,7] <- connections[7,8] <- 1
-connections[15,16] <- connections[16,15] <- 1
-
-edge_list <- which(connections == 1, arr.ind = TRUE)
-edge_list <- edge_list[edge_list[,2] <= edge_list[,1],]
-tree_sim <- graph_from_data_frame(edge_list, directed = FALSE)
-layout <- layout_as_tree(tree_sim)
-
-V(tree_sim)$label <- NA
-V(tree_sim)$size <- 15
-
-# pdf(file = "/home/farrel11/PhD/Project_2/Code_for_Paper/Images/Graphical_Selection/True_Graph.pdf",
-#     width = 10, height = 10)
-par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
-plot.igraph(tree_sim, layout = layout, edge.width = 5, edge.color = "black")
-# dev.off()
-
-################################################################################
-## DO NOT RUN
-
-## Create the data
-Gamma_true <- complete_Gamma(runif(n = nrow(edge_list), 0.5, 1), graph = tree_sim)
-
-## number of simulations and data points
-n_sim <- 5
-n_data <- 100
-
-## tuning parameters
-dqu <- 0.7
-rho <- 0.65
-
-## Simulate the data
-X <- replicate(n = n_sim,
-               expr = rmpareto(n = n_data, model = "HR", par = Gamma_true),
-               simplify = FALSE)
-
-## Transform the data onto standard Laplace margins
-X_list_by_data <- lapply(X, function(x){
-  lapply(apply(x, 2, list), function(y){y[[1]]})})
-X_list_by_var <- lapply(1:d, function(i){lapply(1:n_sim, function(j){X_list_by_data[[j]][[i]]})})
-
-X_to_Y <- lapply(1:d, function(i){
-  mcmapply(FUN = X_to_Laplace,
-           x = X_list_by_var[[i]],
-           MoreArgs = list(q = seq(0.55, 0.99, by = 0.01)),
-           SIMPLIFY = FALSE,
-           mc.cores = detectCores() - 1)})
-
-## Get the output
-u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
-  unname(X_to_Y[[j]][[i]]$u)})})
-qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
-  unname(X_to_Y[[j]][[i]]$qu)})})
-scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
-  unname(X_to_Y[[j]][[i]]$scale)})})
-shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
-  unname(X_to_Y[[j]][[i]]$shape)})})
-Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
-  unname(X_to_Y[[j]][[i]]$Y)})})
-
-################################################################################
-## Read in the data
-
-out <- readRDS(file = "Data/Graphical_Selection/MVP_D16.Rdata")
-
-## Extract the output
-X <- out$data$X
-Y <- out$data$Y
-
-n_sim <- out$par_true$n_sim
-n_data <- out$par_true$n_data
-dqu <- out$par_true$dqu
-rho <- out$par_true$rho
-
-edge_list <- out$par_true$edge_list
-tree_sim <- out$par_true$graph
-
-Gamma_true <- out$par_true$Gamma
-
-u_final <- out$GPD_par$u
-qu_final <- out$GPD_par$qu
-scale_final <- out$GPD_par$scale
-shape_final <- out$GPD_par$shape
-################################################################################
-
-## Now we want to subset the data so that each component is large in turn
-Y_u <- qlaplace(dqu)
-
-Y_Yi_large <- rep(list(vector("list", d)), n_sim)
-for(i in 1:n_sim){
-  for(j in 1:d){
-    Y_Yi_large[[i]][[j]] <- Y[[i]][which(Y[[i]][,j] > Y_u),] 
+## Function to infer the graphical structure of the residuals
+Infer_Adj_Matrix <- function(data, cond = 1,
+                             constrain = TRUE, q = c(0,1), v = 20, aLow = -1, 
+                             maxit = 1e+6, nOptim = 1,
+                             start_HT, start_AGG, rho = 0.1){
+  
+  ## Obtain information from the data
+  dim_data <- dim(data)
+  if(is.null(dim_data)){
+    stop("Data must be a matrix with at least d = 2 columns")
+  }
+  else{
+    d <- dim_data[2]
+    n <- dim_data[1]
+  }
+  
+  ## Check the conditioning random variable is valid and get dependent random variables
+  if(length(cond) > 1){
+    stop("cond must be of length 1")
+  }
+  else if(cond%%1 != 0 | cond <= 0 | cond > d){
+    stop("cond must be a single positie integer")
+  }
+  dependent <- (1:d)[-cond]
+  
+  ## Check a graph has been provided
+  # if(!is_igraph(graph)){
+  #   stop("A graph must be provided")
+  # }
+  
+  ## Obtain the starting parameters
+  if(missing(start_HT)){
+    start_HT <- matrix(0.1, nrow = d-1, ncol = 2)
+  }
+  if(missing(start_AGG)){
+    start_AGG <- matrix(rep(c(0, 1.5, 2, 1.5), d-1), nrow = d-1, ncol = 4, byrow = TRUE)
+  }
+  else if(!is.numeric(start_HT) | !is.numeric(start_AGG)){
+    stop("start_HT and start_AGG must be vectors")
+  }
+  if(length(start_HT) == 2){
+    start_HT <- matrix(rep(start_HT, d-1), ncol = 2, byrow = TRUE)
+  }
+  if(length(start_AGG) == 4){
+    start_AGG <- matrix(rep(start_AGG, d-1), ncol = 4, byrow = TRUE)
+  }
+  if(length(start_HT) != 2*(d-1) | length(start_AGG) != 4*(d-1)){
+    stop("start_HT and start_AGG must be vectors of length 2 or 2(d-1) and 4 or 4(d-1), respectively")
+  }
+  else if(any(abs(start_HT) > 1)){
+    stop("Initial starting values are outside the parameter space for Heffernan and Tawn model")
+  }
+  else if(any(start_AGG[,-1] <= 0)){
+    stop("Initial starting values are outside the parameter space for MVAGG")
+  }
+  
+  ## List for output to be saved
+  out <- list()
+  
+  ## Step 1
+  ## Fit the original conditional multivaraite extreme value model to the data to
+  ## obtain the fitted residuals and dependence parameters
+  yex <- as.matrix(data[,cond])
+  ydep <- as.matrix(data[,-cond])
+  
+  res_HT <- lapply(1:(d-1), function(i){
+    qfun_MVN_indep(yex = yex, ydep = as.matrix(ydep[,i]),
+                   constrain = constrain, aLow = aLow, q = q, v = v,
+                   maxit = maxit, start = start_HT[i,], nOptim = nOptim)})
+  
+  ## Get the necessary output
+  z <- as.matrix(sapply(res_HT, function(x){x$Z}))
+  a_hat <- sapply(res_HT, function(x){x$par$a})
+  b_hat <- sapply(res_HT, function(x){x$par$b})
+  
+  ## If Heffernan and Tawn model has not fit, break the function now
+  if(any(is.na(a_hat))){
+    warning("Error in optim call from Cond_extremes_MVN")
+    out <- list()
+    out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
+    out$Z <- matrix(NA, nrow = n, ncol = d)
+    out$convergence <- NA
+  }
+  else{
+    ## Step 2
+    ## Marginally fit an asymmetric generalised Gaussian distribution to the fitted residuals
+    
+    ## Update the starting parameter for the location parameter as this can be difficult
+    ## to initiate
+    start_AGG[,1] <- apply(z, 2, mean)
+    res_AGG <- lapply(1:(d-1), function(i){fit_agg(par = start_AGG[i,], data = z[,i])})
+    
+    ## Get the necessary output
+    loc_hat <- sapply(res_AGG, function(x){x$par[1]})
+    scale_1_hat <- sapply(res_AGG, function(x){x$par[2]})
+    scale_2_hat <- sapply(res_AGG, function(x){x$par[3]})
+    shape_hat <- sapply(res_AGG, function(x){x$par[4]})
+    
+    ## If AGG has not fit to the marginal distributions, break this now
+    if(any(is.na(loc_hat))){
+      warning("Error in optim call from AGG")
+      out <- list()
+      out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = as(matrix(NA, ncol = d, nrow = d), "sparseMatrix"))
+      out$Z <- matrix(NA, nrow = n, ncol = d)
+      out$convergence <- NA
+    }
+    else{
+      ## Step 3
+      ## Determine the covariance matrix from the data
+      
+      ## First transform the data onto standard Gaussian margins
+      Z_Gaussian <- sapply(1:(d-1), function(i){
+        qnorm(pagg(q = z[,i],
+                   loc = loc_hat[i],
+                   scale_1 = scale_1_hat[i],
+                   scale_2 = scale_2_hat[i],
+                   shape = shape_hat[i]))})
+      
+      ## Step 4 
+      ## Use glasso to infer the graph
+      cor_Z <- cor(Z_Gaussian)
+      
+      glasso_fit <- glasso(s = cor_Z, rho = rho, nobs = n, thr = 1e-8, maxit = 1e+6, penalize.diagonal = FALSE)
+      
+      ## Get the adjacency matrix
+      adj_matrix <- matrix(0, nrow = d-1, ncol = d-1)
+      adj_matrix[which(glasso_fit$wi != 0)] <- 1
+      diag(adj_matrix) <- 0
+      return(adj_matrix)
+    }
   }
 }
 
-## Fit the three-step model and infer the graph
-Inferred_Subgraphs <- lapply(1:n_sim, function(i){
-  mcmapply(FUN = Infer_Adj_Matrix, 
-           data = Y_Yi_large[[i]],
-           cond = 1:d,
-           MoreArgs = list(rho = rho),
-           SIMPLIFY = FALSE)})
-
-## Get the weighted combined graphs for each conditioning variable
-Inferred_Adj_Matrices_Weighted <- lapply(Inferred_Subgraphs, Combine_Sub_Adjacency_Matrices)
-
-## Use majority rule to determine the graphs for each replicate
-Inferred_Edges <- lapply(Inferred_Adj_Matrices_Weighted, function(x){which(x/(d-2) > 0.5, arr.ind = TRUE)})
-
-## combine the above to a single weighted matrix over the 100 replicates
-Inferred_Adj_Matrices <- rep(list(matrix(0, nrow = d, ncol = d)), n_sim)
-for(i in 1:n_sim){
-  Inferred_Adj_Matrices[[i]][Inferred_Edges[[i]]] <- 1
+## Combine sub-matrices, obtained by conditioning on each site in turn, into a single
+## weighted matrix
+Combine_Sub_Adjacency_Matrices <- function(Sub_Matrices){
+  if(!is.list(Sub_Matrices)){
+    stop("Sub_Matrices must be a list of adjacency matrices")
+  }
+  if(!all(sapply(Sub_Matrices, is.square.matrix))){
+    stop("One or more of the matrices provided is not square")
+  }
+  
+  d <- length(Sub_Matrices)
+  if(!all(sapply(Sub_Matrices, dim) == d-1)){
+    stop("Matrices provided have different dimensions")
+  }
+  
+  Inferred_Adjacency_Matrix <- matrix(0, nrow = d, ncol = d)
+  for(i in 1:(d)){
+    Inferred_Adjacency_Matrix[-i,-i] <- 
+      Inferred_Adjacency_Matrix[-i,-i] + Sub_Matrices[[i]]
+  }
+  return(Inferred_Adjacency_Matrix)
 }
-Inferred_Adj_Matrix_Weighted <- Reduce("+", Inferred_Adj_Matrices)
 
-## Plot the weighted graph
-# pdf(file = "/home/farrel11/PhD/Project_2/Code_for_Paper/Images/Graphical_Selection/Inferred_Weighted_Graph.pdf",
-#     width = 10, height = 10)
-par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
-Plot_Graph_From_Adjacency_Matrix(Adj_Matrix = Inferred_Adj_Matrix_Weighted,
-                                 n_sim = n_sim,
-                                 layout = layout,
-                                 true_graph = tree_sim)
-# dev.off()
-
-## Inferred graph over the 100 replicates
-Inferred_Edges_Final <- which(Inferred_Adj_Matrix_Weighted/n_sim > 0.5, arr.ind = TRUE)
-Inferred_Adj_Matrix_Final <- matrix(0, ncol = d, nrow = d)
-Inferred_Adj_Matrix_Final[Inferred_Edges_Final] <- 1
-Graph_Final <- graph_from_adjacency_matrix(Inferred_Adj_Matrix_Final, mode = "undirected")
-
-V(Graph_Final)$label <- NA
-V(Graph_Final)$size <- 15
-
-par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
-plot.igraph(Graph_Final, layout = layout, edge.width = 5, edge.color = "black")
+## Plot the inferred graph when we combine the submatrices together
+Plot_Graph_From_Adjacency_Matrix <- function(Adj_Matrix, n_sim = 1, layout, true_graph = NA){
+  if(!is.square.matrix(Adj_Matrix)){
+    stop("Adj_Matrix must be a square matrix")
+  }
+  if(!is.symmetric.matrix(Adj_Matrix)){
+    stop("Adj_Matrix must be a symmetric matrix")
+  }
+  if(n_sim <= 0 | n_sim%%1 != 0){
+    stop("Number of samples must be a postive integer")
+  }
+  upper_tri_elements <- upper.tri(Adj_Matrix)
+  edges <- which(Adj_Matrix*upper_tri_elements > 0, arr.ind = TRUE)
+  edges <- edges[order(edges[,1]),]
+  g_out <- graph(t(edges), directed = FALSE)
+  
+  d <- ncol(Adj_Matrix)
+  V(g_out)$label <- NA
+  V(g_out)$size <- 15
+  E(g_out)$weight <- (Adj_Matrix[edges])/n_sim
+  
+  if(is_missing(layout)){
+    layout <- layout_with_fr(graph)
+  }
+  if(is_igraph(true_graph)){
+    edges_df <- as.data.frame(edges)
+    ## Get the true edges from the true graph and reorder them too
+    true_edges <- which(as.matrix(as_adjacency_matrix(true_graph))*upper_tri_elements > 0, arr.ind = TRUE)
+    true_edges <- true_edges[order(true_edges[,1]),]
+    true_edges <- as.data.frame(true_edges)
+    
+    ## see which edges are true edges and colour these in black, otherwise colour the edges in grey
+    edges_df$exists <- do.call(paste0, edges_df) %in% do.call(paste0, true_edges)
+    edges_df$colour = "grey"
+    edges_df$colour[which(edges_df$exists == TRUE)] <- "black"
+    E(g_out)$color <- edges_df$colour
+    
+    ## plot the graph
+    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight)
+  }
+  else{
+    plot(g_out, layout = layout, edge.width = 5*E(g_out)$weight, edge.color = "grey") 
+  }
+}
