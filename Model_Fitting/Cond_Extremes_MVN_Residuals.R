@@ -230,30 +230,34 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     a_yi <- a*yex
     b_yi <- yex^b
     Z <- (ydep - a_yi)/b_yi
-    
-    ## Obtain the mean and covariance matrix of the residuals
-    mu_Z <- mean(Z)
-    sigma_Z <- as.numeric(var(Z))
-    
-    ## Fit the profile log-likelihood
-    mu <- a_yi + b_yi*mu_Z
-    sigma <- sigma_Z*(b_yi^2)
-    res <- sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
-    
-    ## Check the value is valid
-    if(is.infinite(res)){
+    if(any(is.infinite(Z)) | any(is.na(Z)) | any(is.nan(Z))){
       return((-10^10)*(-1)^negative)
-      warning("Infinite value of Q in mexDependence")
     }
-    ## Checks if the constraints are satisfied to reduce the parameter space
-    else if(constrain){ 
-      zpos <- quantile(ydep - yex, probs = q)
-      z <- quantile(Z, probs = q)
-      zneg <- quantile(ydep + yex, probs = q)
-      constraints_sat <- texmex:::ConstraintsAreSatisfied(a = a, b = b, z = z, zpos = zpos, zneg = zneg, v = v)
-      if(!all(constraints_sat)){
+    else{
+      ## Obtain the mean and covariance matrix of the residuals
+      mu_Z <- mean(Z)
+      sigma_Z <- as.numeric(var(Z))
+      
+      ## Fit the profile log-likelihood
+      mu <- a_yi + b_yi*mu_Z
+      sigma <- sigma_Z*(b_yi^2)
+      res <- sum(dnorm(ydep, mean = mu, sd = sqrt(sigma), log = TRUE))
+      
+      ## Check the value is valid
+      if(is.infinite(res)){
         return((-10^10)*(-1)^negative)
+        warning("Infinite value of Q in mexDependence")
       }
+      ## Checks if the constraints are satisfied to reduce the parameter space
+      else if(constrain){ 
+        zpos <- quantile(ydep - yex, probs = q)
+        z <- quantile(Z, probs = q)
+        zneg <- quantile(ydep + yex, probs = q)
+        constraints_sat <- texmex:::ConstraintsAreSatisfied(a = a, b = b, z = z, zpos = zpos, zneg = zneg, v = v)
+        if(!all(constraints_sat)){
+          return((-10^10)*(-1)^negative)
+        }
+      } 
     }
     ## Obtain the value of the profile log_likelihood for fixed a and b
     return(res*(-1)^negative)
@@ -264,6 +268,30 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
                    constrain = constrain, aLow = aLow, q = q, v = v, method = "BFGS"),
              silent = TRUE)
   n <- length(yex)
+  
+  if(nOptim > 1){
+    if(inherits(fit, "try-error")){
+      next()
+    }
+    else if(fit$convergence != 0 | fit$value == 1e+10){
+      next()
+    }
+    else{
+      for(i in 2:nOptim){
+        fit <- try(optim(par = par_start <- fit$par, fn = Qpos, control = list(maxit = maxit),
+                         yex = yex, ydep = ydep, negative = TRUE,
+                         constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
+                   silent = TRUE)
+        if(inherits(fit, "try-error")){
+          break()
+        }
+        else if(fit$convergence != 0 | fit$value == 1e+10){
+          break()
+        }
+      } 
+    }
+  }
+  
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVN")
     out <- list()
@@ -279,32 +307,6 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     out$value <- NA
     out$convergence <- NA
     out$Z <- matrix(NA, nrow = n, ncol = 1)
-  }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      par_start <- fit$par
-      par_start[which(par_start < 0)] <- 0.1
-      fit <- try(optim(par = par_start, fn = Qpos, control = list(maxit = maxit),
-                       yex = yex, ydep = ydep, negative = TRUE,
-                       constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
-                 silent = TRUE)
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_Extremes_MVN")
-        out <- list()
-        out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- matrix(NA, nrow = n, ncol = 1)
-      }
-      else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Non-convergence in Cond_Extremes_MVN")
-        out <- list()
-        out$par <- list(a = NA, b = NA, mu = NA, Sigma = NA)
-        out$value <- NA
-        out$convergence <- NA
-        out$Z <- matrix(NA, nrow = n, ncol = 1)
-      }
-    }
   }
   else if(!is.na(fit$par[1])){
     ## Extract MLEs of alpha and beta
