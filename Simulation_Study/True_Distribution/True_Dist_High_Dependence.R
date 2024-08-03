@@ -1,7 +1,7 @@
 ################################################################################
 ## Load in required packages
 rm(list = ls())
-required_pckgs <- c("fake", "igraph", "LaplacesDemon", "rlang", "parallel")
+required_pckgs <- c("fake", "gtools", "igraph", "kableExtra", "LaplacesDemon", "rlang", "parallel", "purrr")
 # install.packages(required_pckgs, dependencies = TRUE)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
@@ -21,7 +21,7 @@ source("Model_Fitting/Cond_Extremes_MVAGG_Residuals_Two_Step.R")
 source("Model_Fitting/Cond_Extremes_MVAGG_Residuals_Three_Step.R")
 
 ## Plotting functions
-source("/Simulation_Study/True_Distribution/Plotting_Functions.R")
+source("Simulation_Study/True_Distribution/Plotting_Functions.R")
 
 ################################################################################
 ## True graph
@@ -141,41 +141,29 @@ a_hat_HT <- lapply(fit_HT, function(x){lapply(x, function(y){lapply(y, function(
 b_hat_HT <- lapply(fit_HT, function(x){lapply(x, function(y){lapply(y, function(z){z$par$main[2,]})})})
 
 ## One-step model fits
-## One-step model is sensitive to the starting parameter of the the location parameter in the AGG
-## This is heavily correlated with the alpha dependence parameter
-## Give an "informed" start for the location parameter in the AGG
-
-loc_start_One_Step <- lapply(1:length(n_excesses), function(i){
-  lapply(1:d, function(j){lapply(1:n_sim, function(k){
-    apply((Y_Yi_large[[i]][[j]][[k]][,-j] - matrix(0.1*Y_Yi_large[[i]][[j]][[k]][,j], nrow = n_excesses[i], ncol = d-1))/
-            matrix(Y_Yi_large[[i]][[j]][[k]][,j]^0.1, nrow = n_excesses[i], ncol = d-1), 2, mean)
-  })})})
-start_par_One_Step <- lapply(1:length(n_excesses), function(i){
-  lapply(1:d, function(j){lapply(1:n_sim, function(k){
-    cbind(rep(0.1, d-1), rep(0.1, d-1), loc_start_One_Step[[i]][[j]][[k]],
-          rep(1.5, d-1), rep(1.5, d-1), rep(1.5, d-1))})})})
-
 ## Independence
+## Set nOptim = 5 so that the optimiser runs several times
+## This is necessary as convergence can be difficult
 fit_One_Step_Indep <- lapply(1:length(n_excesses), function(i){
   lapply(1:d, function(j){
     mcmapply(FUN = Cond_Extremes_MVAGG,
              data = Y_Yi_large[[i]][[j]],
-             start = start_par_One_Step[[i]][[j]],
              MoreArgs = list(graph = NA,
                              cond = j,
-                             maxit = 1e+9),
+                             maxit = 1e+9,
+                             nOptim = 5),
              SIMPLIFY = FALSE,
              mc.cores = detectCores() - 1)})})
 
-## Give some informed starting place to the graphical and saturated models
 start_par_One_Step <- lapply(1:length(n_excesses), function(i){
-  lapply(1:d, function(j){lapply(1:n_sim, function(k){
-    cbind(pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[1,]), 0.1), 0.5),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[2,]), 0.1), 0.5),
-          unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[3,]),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[4,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[5,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[6,]), 0.5), 2))})})})
+  lapply(1:d, function(j){
+    lapply(1:n_sim, function(k){
+      cbind(rep(0.1, d-1), rep(0.1, d-1),
+            fit_One_Step_Indep[[i]][[j]][[k]]$par$main[3,],
+            rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))
+    })
+  })
+})
 
 ## Graphical
 fit_One_Step_Graph <- lapply(1:length(n_excesses), function(i){
@@ -185,7 +173,8 @@ fit_One_Step_Graph <- lapply(1:length(n_excesses), function(i){
              start = start_par_One_Step[[i]][[j]],
              MoreArgs = list(graph = g_true,
                              cond = j,
-                             maxit = 1e+9),
+                             maxit = 1e+9,
+                             nOptim = 5),
              SIMPLIFY = FALSE,
              mc.cores = detectCores() - 1)})})
 
@@ -197,13 +186,14 @@ fit_One_Step_Full <- lapply(1:length(n_excesses), function(i){
              start = start_par_One_Step[[i]][[j]],
              MoreArgs = list(graph = make_full_graph(n = d),
                              cond = j,
-                             maxit = 1e+9),
+                             maxit = 1e+9,
+                             nOptim = 5),
              SIMPLIFY = FALSE,
              mc.cores = detectCores() - 1)})})
 
 
 ## Two-step model fits
-## Again, give an informed start to the location parameter
+## Give an informed start to the location parameter
 loc_start_Two_Step <- lapply(1:length(n_excesses), function(i){
   lapply(1:d, function(j){lapply(1:n_sim, function(k){
     apply(Z_hat_HT[[i]][[j]][[k]], 2, mean)})})})
@@ -371,6 +361,7 @@ while(any(sapply(Index_One_Step_Graph, function(x){sapply(x, length)}) > 0)){
                                          cond = j,
                                          graph = g_true,
                                          start = start_par_One_Step,
+                                         nOptim = 5,
                                          maxit = 1e+9),
                      error = function(e){"Error in model fitting"})
         }
@@ -383,7 +374,7 @@ while(any(sapply(Index_One_Step_Graph, function(x){sapply(x, length)}) > 0)){
     stop("50 starting values attempted")
   }
   
-  Index_One_Step_Graph <- lapply(fit_One_Step_Indep, function(x){
+  Index_One_Step_Graph <- lapply(fit_One_Step_Graph, function(x){
     lapply(x, function(y){which(sapply(y, function(z){is.na(z$convergence)}))})})
   if(any(sapply(Index_One_Step_Graph, function(x){sapply(x, any)})) == FALSE){
     print("Model Fitting Complete")
@@ -416,7 +407,8 @@ while(any(sapply(Index_One_Step_Full, function(x){sapply(x, length)}) > 0)){
                                          cond = j,
                                          graph = make_full_graph(n = d),
                                          start = start_par_One_Step,
-                                         maxit = 1e+9),
+                                         maxit = 1e+9,
+                                         nOptim = 5),
                      error = function(e){"Error in model fitting"})
         }
       }
@@ -716,7 +708,6 @@ Gamma_hat_Three_Step_Full <- lapply(1:length(n_excesses), function(i){lapply(1:d
 ## Assess convergence to true parameters
 method_vec <- c("One-step - Independence", "One-step - Graphical", "One-step - Saturated", "Two/Three-step")
 
-setwd("/Users/aidenfarrell/Documents/GitHub/Graphical_Conditional_Extremes/Simulation_Study/True_Distribution/High_Dependence/Plots")
 ## Alpha
 Alpha_plot <- comp_plots(data = lapply(1:d, function(j){
   lapply(1:length(n_excesses), function(i){
@@ -726,7 +717,7 @@ Alpha_plot <- comp_plots(data = lapply(1:d, function(j){
          a_hat_Two_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(alpha)[j ~ "|" ~ i]), 
   ylims = c(-1.25, 1), par_true = alpha_true)
-pdf("Alpha.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Alpha.pdf", width = 15, height = 10)
 print(Alpha_plot)
 dev.off()
 
@@ -738,8 +729,8 @@ Beta_plot <- comp_plots(data = lapply(1:d, function(j){
          b_hat_One_Step_Full[[i]][[j]],
          b_hat_Two_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(beta)[j ~ "|" ~ i]), 
-  ylims = c(-0.5, 0.375), par_true = beta_true)
-pdf("Beta.pdf", width = 15, height = 10)
+  ylims = c(-0.5, 0.5), par_true = beta_true)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Beta.pdf", width = 15, height = 10)
 print(Beta_plot)
 dev.off()
 
@@ -759,7 +750,7 @@ Loc_plot <- comp_plots(data = lapply(1:d, function(j){
          loc_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(nu)[j ~ "|" ~ i]), 
   ylims = c(-1, 1), par_true = loc_true)
-pdf("Location.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Location.pdf", width = 15, height = 10)
 print(Loc_plot)
 dev.off()
 
@@ -774,8 +765,8 @@ Scale_1_plot <- comp_plots(data = lapply(1:d, function(j){
          scale_1_hat_Two_Step_Full[[i]][[j]],
          scale_1_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(kappa[1])[j ~ "|" ~ i]), 
-  ylims = c(-1, 1), par_true = scale_1_true)
-pdf("Scale_Left.pdf", width = 15, height = 10)
+  ylims = c(-0.5, 1), par_true = scale_1_true)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Scale_Left.pdf", width = 15, height = 10)
 print(Scale_1_plot)
 dev.off()
 
@@ -791,7 +782,7 @@ Scale_2_plot <- comp_plots(data = lapply(1:d, function(j){
          scale_2_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(kappa[2])[j ~ "|" ~ i]), 
   ylims = c(-1, 1.5), par_true = scale_2_true)
-pdf("Scale_Right.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Scale_Right.pdf", width = 15, height = 10)
 print(Scale_2_plot)
 dev.off()
 
@@ -807,7 +798,7 @@ Shape_plot <- comp_plots(data = lapply(1:d, function(j){
          shape_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(delta)[j ~ "|" ~ i]), 
   ylims = c(-1, 1.5), par_true = shape_true)
-pdf("Shape.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Shape.pdf", width = 15, height = 10)
 print(Shape_plot)
 dev.off()
 
@@ -824,6 +815,119 @@ Gamma_plot <- comp_plots_matrix(data = lapply(1:d, function(j){
   methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)[~ "|" ~ i]), 
   ylims = c(-0.3, 0.3), cov_mat_true = Sigma_true, precision = TRUE)
 
-pdf("Gamma.pdf", width = 20, height = 15)
+pdf("Images/Simulation_Study/True_Distribution/High_Dependence/Gamma.pdf", width = 20, height = 15)
 print(Gamma_plot)
 dev.off()
+
+################################################################################
+
+## Compare the log-likelihoods from the various models to affirm that we don't lose
+## information by doing the iterative approach
+
+## Extract the log-likelihood for the various models
+log_like_true <- 
+  lapply(1:length(n_excesses), function(i){
+    sapply(1:d, function(j){
+      sapply(1:n_sim, function(k){
+        sum(dmvagg(data = Z_not_i[[i]][[j]][[k]],
+                   loc = loc_true[-j],
+                   scale_1 = scale_1_true[-j],
+                   scale_2 = scale_2_true[-j],
+                   shape = shape_true[-j],
+                   Gamma = as(solve(rho_true_i[[j]]), "sparseMatrix"), log = TRUE)) -
+          sum(sapply(beta_true[-j], function(x){x*log(Yi_large[[i]][[j]][[k]])}))
+      })})})
+
+log_like_One_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_One_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_One_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_One_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_Two_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Two_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Indep <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Indep[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Graph <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Graph[[i]][[j]][[k]]$loglike})})})
+
+log_like_Three_Step_Full <- lapply(1:length(n_excesses), function(i){
+  sapply(1:d, function(j){
+    sapply(1:n_sim, function(k){fit_Three_Step_Full[[i]][[j]][[k]]$loglike})})})
+
+## Compare median and 95% confidence interval of bias between the model-based and
+## true log-likelihood
+probs = c(0.5, 0.025, 0.975)
+
+CIs_One_Step_Indep <- pmap(.l = list(x = log_like_true, y = log_like_One_Step_Indep),
+                           .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Two_Step_Indep <- pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Indep),
+                           .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Three_Step_Indep <- pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Indep),
+                             .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_One_Step_Graph <- pmap(.l = list(x = log_like_true, y = log_like_One_Step_Graph),
+                           .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Two_Step_Graph <- pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Graph),
+                           .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Three_Step_Graph <- pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Graph),
+                             .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_One_Step_Full <- pmap(.l = list(x = log_like_true, y = log_like_One_Step_Full),
+                          .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Two_Step_Full <- pmap(.l = list(x = log_like_true, y = log_like_Two_Step_Full),
+                          .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_Three_Step_Full <- pmap(.l = list(x = log_like_true, y = log_like_Three_Step_Full),
+                            .f = function(x, y){round(t(apply(y - x, 2, quantile, p = probs)), 1)})
+
+CIs_out <- rep(list(matrix(NA, nrow = d, ncol = 10)), length(n_excesses))
+for(i in 1:length(n_excesses)){
+  for(j in 1:d){
+    CIs_out[[i]][j,] <- c(j,
+                          paste0(CIs_One_Step_Indep[[i]][j,1], " (", CIs_One_Step_Indep[[i]][j,2], ", ", CIs_One_Step_Indep[[i]][j,3], ")"),
+                          paste0(CIs_Two_Step_Indep[[i]][j,1], " (", CIs_Two_Step_Indep[[i]][j,2], ", ", CIs_Two_Step_Indep[[i]][j,3], ")"),
+                          paste0(CIs_Three_Step_Indep[[i]][j,1], " (", CIs_Three_Step_Indep[[i]][j,2], ", ", CIs_Three_Step_Indep[[i]][j,3], ")"),
+                          paste0(CIs_One_Step_Graph[[i]][j,1], " (", CIs_One_Step_Graph[[i]][j,2], ", ", CIs_One_Step_Graph[[i]][j,3], ")"),
+                          paste0(CIs_Two_Step_Graph[[i]][j,1], " (", CIs_Two_Step_Graph[[i]][j,2], ", ", CIs_Two_Step_Graph[[i]][j,3], ")"),
+                          paste0(CIs_Three_Step_Graph[[i]][j,1], " (", CIs_Three_Step_Graph[[i]][j,2], ", ", CIs_Three_Step_Graph[[i]][j,3], ")"),
+                          paste0(CIs_One_Step_Full[[i]][j,1], " (", CIs_One_Step_Full[[i]][j,2], ", ", CIs_One_Step_Full[[i]][j,3], ")"),
+                          paste0(CIs_Two_Step_Full[[i]][j,1], " (", CIs_Two_Step_Full[[i]][j,2], ", ", CIs_Two_Step_Full[[i]][j,3], ")"),
+                          paste0(CIs_Three_Step_Full[[i]][j,1], " (", CIs_Three_Step_Full[[i]][j,2], ", ", CIs_Three_Step_Full[[i]][j,3], ")"))
+  }
+}
+
+col_names <- c("Conditioning Variable", rep(c("One-Step", "Two-Step", "Three-Step"), 3))
+CIs_out[[1]] %>% 
+  kbl(format = "latex",
+      col.names = col_names, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
+
+CIs_out[[2]] %>% 
+  kbl(format = "latex",
+      col.names = col_names, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
