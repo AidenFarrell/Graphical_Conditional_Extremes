@@ -130,7 +130,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
       
       ## Fit the independence model
       res <- lapply(1:(d-1), function(i){
-        qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,i]), maxit = maxit, start = c(start_AGG[i,]))})
+        qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,i]), maxit = maxit, start = c(start_AGG[i,]), nOptim = nOptim)})
       
       ## Extract the output
       out <- list()
@@ -168,7 +168,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
       
       if(n_edges_full == n_edges_graph_cond){
         ## Fit the saturated model
-        res <- qfun_MVAGG_Two_Step_Full(z = z, start = c(start_AGG), maxit = maxit)
+        res <- qfun_MVAGG_Two_Step_Full(z = z, start = c(start_AGG), maxit = maxit, nOptim = nOptim)
         
         ## Extract the output
         out <- list()
@@ -199,7 +199,8 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
           
           ## Fit the graphical model
           res <- qfun_MVAGG_Two_Step_Graph(z = z, Gamma_zero = non_edges,
-                                           maxit = maxit, start = c(start_AGG))
+                                           maxit = maxit, start = c(start_AGG),
+                                           nOptim = nOptim)
           
           ## Extract the output
           out <- list()
@@ -234,7 +235,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
               ## Fit independence model to this component
               res_1[[i]] <- qfun_MVAGG_Two_Step_Indep(z = as.matrix(z[,v_comps[[i]]]), 
                                                       start = c(start_AGG[v_comps[[i]],]),
-                                                      maxit = maxit)
+                                                      maxit = maxit, nOptim = nOptim)
             }
             else{
               all_edges_comp <- as.data.frame(combinations(n = n_vertices, r = 2, v = 1:n_vertices))
@@ -243,7 +244,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
               if(nrow(all_edges_comp) == nrow(g_edges_comp)){
                 res_1[[i]] <- qfun_MVAGG_Two_Step_Full(z = as.matrix(z[,v_comps[[i]]]),
                                                        start = c(start_AGG[v_comps[[i]],]),
-                                                       maxit = maxit)
+                                                       maxit = maxit, nOptim = nOptim)
               }
               else{
                 ## Fit graphical model to this component
@@ -252,7 +253,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
                 res_1[[i]] <- qfun_MVAGG_Two_Step_Graph(z = as.matrix(z[,v_comps[[i]]]), 
                                                         Gamma_zero = non_edges_comp,
                                                         start = c(start_AGG[v_comps[[i]],]),
-                                                        maxit = maxit)
+                                                        maxit = maxit, nOptim = nOptim)
               } 
             }
           }
@@ -304,7 +305,7 @@ Cond_Extremes_MVAGG_Two_Step <- function(data, cond, graph = NA,
   return(out)
 }
 
-qfun_MVAGG_Two_Step_Indep <- function(z, maxit, start){
+qfun_MVAGG_Two_Step_Indep <- function(z, maxit, start, nOptim = 1){
   
   ## Function for the optim to optimise over
   Qpos <- function(param, z, negative = FALSE){
@@ -332,6 +333,28 @@ qfun_MVAGG_Two_Step_Indep <- function(z, maxit, start){
   fit <- try(optim(par = start, fn = Qpos, control = list(maxit = maxit),
                    z = z, negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
              silent = FALSE)
+  if(nOptim > 1){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
+        loc = fit$par[1]
+        scale_1 = fit$par[2]
+        scale_2 = fit$par[3]
+        shape = fit$par[4]
+        par_start <- c(pmax(-2, pmin(loc, 2)), pmax(0.5, pmin(scale_1, 2)),
+                       pmax(0.5, pmin(scale_2, 2)), pmax(0.5, pmin(shape, 2)))
+        fit <- try(optim(par = c(par_start), fn = Qpos, control = list(maxit = maxit),
+                         z = z, negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
+                   silent = FALSE) 
+      }
+    }
+  }
+  
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
@@ -363,7 +386,7 @@ qfun_MVAGG_Two_Step_Indep <- function(z, maxit, start){
   return(out)
 }
 
-qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
+qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start, nOptim = 1){
   
   ## Function for the optim to optimise over
   Qpos <- function(param, z, Gamma_zero, negative = FALSE){
@@ -384,7 +407,10 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.semi.definite(Sigma_start)){
+      if(any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+        return((-10^10)*(-1)^negative)
+      }
+      else if(min(eigen(Sigma_start)$values) < 0){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -414,6 +440,27 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
   
   ## Extract the output
   d <- ncol(z)
+  if(nOptim > 1){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
+        loc <- fit$par[1:d]
+        scale_1 <- fit$par[(d + 1):(2*d)]
+        scale_2 <- fit$par[(2*d + 1):(3*d)]
+        shape <- fit$par[(3*d + 1):(4*d)]
+        par_start <- cbind(pmax(-2, pmin(loc, 2)), pmax(0.5, pmin(scale_1, 2)),
+                           pmax(0.5, pmin(scale_2, 2)), pmax(0.5, pmin(shape, 2)))
+        fit <- try(optim(par = c(par_start), fn = Qpos, control = list(maxit = maxit),
+                         z = z, Gamma_zero = Gamma_zero, negative = TRUE, method = "BFGS", hessian = FALSE),
+                   silent = FALSE) 
+      }
+    }
+  }
   
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
@@ -467,7 +514,7 @@ qfun_MVAGG_Two_Step_Graph <- function(z, Gamma_zero, maxit, start){
   return(out)
 }
 
-qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
+qfun_MVAGG_Two_Step_Full <- function(z, maxit, start, nOptim = 1){
   
   ## Function for the optim to optimise over
   Qpos <- function(param, z, negative = FALSE){
@@ -488,7 +535,10 @@ qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
         return((-10^10)*(-1)^negative)
       }
       Sigma_start <- cor(Q_F_z)
-      if(!is.positive.semi.definite(Sigma_start)){
+      if(any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
+        return((-10^10)*(-1)^negative)
+      }
+      else if(min(eigen(Sigma_start)$values) < 0){
         return((-10^10)*(-1)^negative)
       }
       else{
@@ -516,6 +566,27 @@ qfun_MVAGG_Two_Step_Full <- function(z, maxit, start){
   
   ## Extract the output
   d <- ncol(z)
+  if(nOptim > 1){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
+        loc <- fit$par[1:d]
+        scale_1 <- fit$par[(d + 1):(2*d)]
+        scale_2 <- fit$par[(2*d + 1):(3*d)]
+        shape <- fit$par[(3*d + 1):(4*d)]
+        par_start <- cbind(pmax(-2, pmin(loc, 2)), pmax(0.5, pmin(scale_1, 2)),
+                           pmax(0.5, pmin(scale_2, 2)), pmax(0.5, pmin(shape, 2)))
+        fit <- try(optim(par = c(par_start), fn = Qpos, control = list(maxit = maxit),
+                         z = z, negative = TRUE, method = "BFGS", hessian = FALSE),
+                   silent = FALSE) 
+      }
+    }
+  }
   
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
