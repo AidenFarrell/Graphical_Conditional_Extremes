@@ -1,7 +1,7 @@
 ################################################################################
 #Load in required packages
 rm(list = ls())
-required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "parallel")
+required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "parallel", "rlang")
 # install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
@@ -116,16 +116,6 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
   return(plot_out)
 }
 
-## Function to calculate the RMSE of a sample
-RMSE <- function(x, xhat){
-  (mean((x - xhat)^2))^(1/2)
-}
-
-## Function to calculate the absolute bias of a sample
-Bias <- function(x, xhat){
-  mean(abs(x - xhat))
-}
-
 ################################################################################
 ## Set up the simulation study
 
@@ -234,7 +224,8 @@ fit_One_Step_Graph <- lapply(1:d, function(i){
            start = start_par_One_Step[[i]],
            MoreArgs = list(graph = g_true,
                            cond = i,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -245,7 +236,8 @@ fit_Two_Step_Graph <- lapply(1:d, function(i){
            MoreArgs = list(graph = g_true,
                            cond = i,
                            v = ceiling(max(sapply(Y, max))) + 1,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -314,7 +306,8 @@ while(any(sapply(Index_One_Step_Graph, length) > 0)){
                                   cond = i,
                                   graph = g_true,
                                   start = start_par_One_Step,
-                                  maxit = 1e+9),
+                                  maxit = 1e+9,
+                                  nOptim = 2),
               silent = TRUE)
       }
     }
@@ -351,7 +344,7 @@ while(any(sapply(Index_Two_Step_Graph, length) > 0)){
                                            cond = i,
                                            graph = g_true,
                                            v = ceiling(max(sapply(Y, max))) + 1,
-                                           start = start_par_Two_Step,
+                                           start_AGG = start_par_Two_Step,
                                            maxit = 1e+9),
               silent = TRUE)
       }
@@ -529,6 +522,10 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
   labs(x = substitute(hat(kappa[1])), y = substitute(hat(kappa[2]))) + 
+  lims(x = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
+             ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1),
+       y = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
+             ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1)) +
   facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
 dev.off()
 
