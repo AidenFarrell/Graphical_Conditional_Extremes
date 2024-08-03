@@ -36,8 +36,8 @@ layout <- layout_as_tree(tree_sim)
 V(tree_sim)$label <- NA
 V(tree_sim)$size <- 15
 
-pdf(file = "Images/Simulation_Study/Graphical_Selection/True_Graph.pdf", width = 10, height = 10)
 par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
+pdf(file = "Images/Simulation_Study/Graphical_Selection/True_Graph.pdf", width = 10, height = 10)
 plot.igraph(tree_sim, layout = layout, edge.width = 5, edge.color = "black")
 dev.off()
 
