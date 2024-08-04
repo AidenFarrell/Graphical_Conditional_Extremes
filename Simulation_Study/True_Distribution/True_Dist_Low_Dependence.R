@@ -312,12 +312,12 @@ while(any(sapply(Index_One_Step_Indep, function(x){sapply(x, length)}) > 0)){
         ind <- Index_One_Step_Indep[[i]][[j]]
         for(k in 1:length(ind)){
           fit_One_Step_Indep[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                          cond = j,
                                          graph = NA,
                                          start = start_par_One_Step,
                                          maxit = 1e+9),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
@@ -357,13 +357,13 @@ while(any(sapply(Index_One_Step_Graph, function(x){sapply(x, length)}) > 0)){
         ind <- Index_One_Step_Graph[[i]][[j]]
         for(k in 1:length(ind)){
           fit_One_Step_Graph[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                          cond = j,
                                          graph = g_true,
                                          start = start_par_One_Step,
                                          nOptim = 5,
                                          maxit = 1e+9),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
@@ -403,13 +403,13 @@ while(any(sapply(Index_One_Step_Full, function(x){sapply(x, length)}) > 0)){
         ind <- Index_One_Step_Full[[i]][[j]]
         for(k in 1:length(ind)){
           fit_One_Step_Full[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                          cond = j,
                                          graph = make_full_graph(n = d),
                                          start = start_par_One_Step,
                                          maxit = 1e+9,
                                          nOptim = 5),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
@@ -447,12 +447,12 @@ while(any(sapply(Index_Two_Step_Indep, function(x){sapply(x, length)}) > 0)){
         ind <- Index_Two_Step_Indep[[i]][[j]]
         for(k in 1:length(ind)){
           fit_Two_Step_Indep[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                                   cond = j,
                                                   graph = NA,
                                                   start_AGG = start_par_Two_Step,
                                                   maxit = 1e+9),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
@@ -490,12 +490,12 @@ while(any(sapply(Index_Two_Step_Graph, function(x){sapply(x, length)}) > 0)){
         ind <- Index_Two_Step_Graph[[i]][[j]]
         for(k in 1:length(ind)){
           fit_Two_Step_Graph[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                                   cond = j,
                                                   graph = g_true,
                                                   start_AGG = start_par_Two_Step,
                                                   maxit = 1e+9),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
@@ -533,12 +533,12 @@ while(any(sapply(Index_Two_Step_Full, function(x){sapply(x, length)}) > 0)){
         ind <- Index_Two_Step_Full[[i]][[j]]
         for(k in 1:length(ind)){
           fit_Two_Step_Full[[i]][[j]][[ind[k]]] <-
-            tryCatch(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
+            try(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[j]][[ind[k]]],
                                                   cond = j,
                                                   graph = make_full_graph(n = d),
                                                   start_AGG = start_par_Two_Step,
                                                   maxit = 1e+9),
-                     error = function(e){"Error in model fitting"})
+                     silent = TRUE)
         }
       }
     }
