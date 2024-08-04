@@ -48,9 +48,19 @@ shape_true <- runif(n = d, 0.8, 2.5)
 simul <- SimulatePrecision(theta = as.matrix(as_adjacency_matrix(g_true)), 
                            v_sign = -1, v_within = c(0.99, 0.9999))
 Gamma_true <- simul$omega
+
+## Print for inclusion in paper
+round(Gamma_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
+
 Sigma_true <- solve(Gamma_true)
 rho_true <- cov2cor(Sigma_true)
-rho_true
+
+## Print for inclusion in paper
+round(rho_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
 
 Sigma_true_i <- lapply(1:d, function(i){Cond_Sigma(Sigma_true, i)})
 rho_true_i <- lapply(Sigma_true_i, function(x){cov2cor(x)})
