@@ -30,15 +30,21 @@ source("Prediction/Sim_Surfaces.R")
 ################################################################################
 out <- readRDS("Data/MVN_Low_Dependence_D5.RData")
 
+## Obtain the true parameters 
 g_true <- out$par_true$graph
 d <- length(V(g_true)) 
 n_sim <- out$par_true$n_sim
 n_data <- out$par_true$n_data
 
+mu_true <- out$par_true$mu
+Gamma_true <- out$par_true$Gamma
+Sigma_true <- solve(Gamma_true)
+rho_true <- cov2cor(Sigma_true)
+
 ## Transforms
 X_to_Y <- out$transforms
 
-## get the data
+## Obtain the data
 X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
 
@@ -200,7 +206,6 @@ Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y
 
 ## Now we want to subset the data so that each component is large in turn
 dqu <- 0.9
-Y_u <- lapply(Y, function(x){apply(x, 2, quantile, probs = dqu)})
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -939,6 +944,32 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   )
 dev.off()
 
+## 2 x 2 plot of the above for one conditioning variable
+for(i in 1:d){
+  label_x <- function(labels) {
+    sapply(labels, function(label) {
+      substitute("P(" ~ X[label] > u[label] ~ "|" ~ X[i] > u[i] ~ ")", list(label = label, i = i))
+    })
+  }
+  bias_ci_df_cond <- bias_ci_df[which(bias_ci_df$Conditioning_Variable == i),]
+  bias_ci_df_cond <- bias_ci_df_cond[-which(bias_ci_df_cond$Dependent_Variable == i),]
+  pdf(file = paste0("Images/Simulation_Study/MVN/Low_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
+  p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
+    geom_polygon(aes(fill = Method), alpha = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+    theme(legend.position = "top") +
+    labs(x = "u (Dependent Variable)", y = "Bias") +
+    facet_wrap(~ Dependent_Variable,
+               nrow = 2, ncol = 2,
+               scales = "free_x",
+               labeller = labeller(
+                 Conditioning_Variable = as_labeller(label_y, default = label_parsed),
+                 Dependent_Variable = as_labeller(label_x, default = label_parsed)
+               )
+    )
+  print(p)
+  dev.off() 
+}
 ################################################################################
 # out <- list(transforms = X_to_Y,
 #             par_true = list(n_sim = n_sim, n_data = n_data, 
