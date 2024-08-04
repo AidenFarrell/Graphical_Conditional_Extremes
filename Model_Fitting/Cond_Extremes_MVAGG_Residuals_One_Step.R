@@ -404,14 +404,14 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
   d <- ncol(ydep)
   n <- nrow(ydep)
   if(nOptim > 1){
-    if(inherits(fit, "try-error")){
-      next()
-    }
-    else if(fit$convergence != 0 | fit$value == 1e+10){
-      next()
-    }
-    else{
-      for(i in 2:nOptim){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
         a_hat <- fit$par[1:d]
         b_hat <- fit$par[(d + 1):(2*d)]
         mu_hat <- fit$par[(2*d + 1):(3*d)]
@@ -425,14 +425,7 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
                          control = list(maxit = maxit), Gamma_zero = Gamma_zero,
                          negative = TRUE, method = "BFGS", hessian = FALSE),
                    silent = FALSE)
-        
-        if(inherits(fit, "try-error")){
-          break()
-        }
-        else if(fit$convergence != 0 | fit$value == 1e+10){
-          break()
-        }
-      }
+      } 
     }
   }
   
@@ -560,14 +553,14 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
   d <- ncol(ydep)
   n <- length(yex)
   if(nOptim > 1){
-    if(inherits(fit, "try-error")){
-      next()
-    }
-    else if(fit$convergence != 0 | fit$value == 1e+10){
-      next()
-    }
-    else{
-      for(i in 2:nOptim){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
         a_hat <- fit$par[1:d]
         b_hat <- fit$par[(d + 1):(2*d)]
         mu_hat <- fit$par[(2*d + 1):(3*d)]
@@ -581,13 +574,6 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
                          control = list(maxit = maxit),
                          negative = TRUE, method = "BFGS", hessian = FALSE),
                    silent = FALSE)
-        
-        if(inherits(fit, "try-error")){
-          break()
-        }
-        else if(fit$convergence != 0 | fit$value == 1e+10){
-          break()
-        }
       } 
     }
   }
