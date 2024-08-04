@@ -1,7 +1,7 @@
 ################################################################################
 #Load in required packages
 rm(list = ls())
-required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "parallel", "rlang")
+required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "kableExtra", "parallel", "rlang")
 # install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
@@ -164,8 +164,19 @@ set.seed(seed)
 simul <- SimulatePrecision(theta = as.matrix(as_adjacency_matrix(g_true)), v_sign = -1,
                            v_within = c(0.99, 0.9999999))
 Gamma_true <- simul$omega
+
+## Print for inclusion in paper
+round(Gamma_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
+
 Sigma_true <- solve(Gamma_true)
 rho_true <- cov2cor(Sigma_true)
+
+## Print for inclusion in paper
+round(rho_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
 
 ## Mean parameter
 mu_true <- runif(d, -5, 5)
