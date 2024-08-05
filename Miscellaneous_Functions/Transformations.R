@@ -72,7 +72,7 @@ semiparametric_gpd_transform <- function(p, par, distFun){
 ## Transform onto standard Laplace margins
 ## Uses the semi-parametric method of Coles & Tawn (1991)
 ## Threshold is selected using Murphy et al. (2024)
-X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
+X_to_Laplace <- function(x, u_poss, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   ## Checks on the inputs
   if(!is.numeric(x)){
     stop("x must be a vector")
@@ -91,7 +91,9 @@ X_to_Laplace <- function(x, q = seq(0.55, 0.99, by = 0.01), k = 200, m = 500){
   }
   
   ## Perform the threshold selection
-  u_poss <- quantile(x, q)
+  if(is_missing(u_poss)){
+    u_poss <- quantile(x, q) 
+  }
   u_out <- thresh_qq_metric(data = x, thresh = u_poss, k = k, m = m)
   
   ## Get the output from the threshold selection
