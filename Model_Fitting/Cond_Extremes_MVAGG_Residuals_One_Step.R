@@ -268,6 +268,27 @@ qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
                    control = list(maxit = maxit),
                    negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
              silent = FALSE)
+  
+  if(nOptim > 1){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
+        start_par <- c(pmin(pmax(fit$par[1], 0.1), 0.5),
+                       pmin(pmax(fit$par[2], 0.1), 0.5), 
+                       fit$par[-c(1:2)])
+        fit <- try(optim(par = start_par, fn = Qpos, yex = yex, ydep = ydep,
+                         control = list(maxit = maxit),
+                         negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
+                   silent = FALSE)
+      }
+    }
+  }
+  
   if(inherits(fit, "try-error")){
     warning("Error in optim call from Cond_Extremes_MVAGG")
     out <- list()
@@ -284,37 +305,7 @@ qfun_MVAGG_indep <- function(yex, ydep, maxit, start, nOptim){
     out$value <- NA
     out$convergence <- NA
   }
-  else if(nOptim > 1){
-    for(i in 2:nOptim){
-      start_par <- c(pmin(pmax(fit$par[1], 0.1), 0.5),
-                         pmin(pmax(fit$par[2], 0.1), 0.5), 
-                         fit$par[-c(1:2)])
-      fit <- try(optim(par = start_par, fn = Qpos, yex = yex, ydep = ydep,
-                       control = list(maxit = maxit),
-                       negative = TRUE, method = "Nelder-Mead", hessian = FALSE),
-                 silent = FALSE)
-      if(inherits(fit, "try-error")){
-        warning("Error in optim call from Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
-        out$Z <- NA 
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-      else if(fit$convergence != 0 | fit$value == 1e+10){
-        warning("Non-convergence in Cond_Extremes_MVAGG")
-        out <- list()
-        out$par <- list(a = NA, b = NA, loc = NA, scale_1 = NA, scale_2 = NA, shape = NA)
-        out$Z <- NA 
-        out$value <- NA
-        out$convergence <- NA
-        break()
-      }
-    }
-  }
-  
-  if(!is.na(fit$par[1])){
+  else if(!is.na(fit$par[1])){
     ## Extract MLEs of alpha and beta
     a_hat <- fit$par[1]
     b_hat <- fit$par[2]
