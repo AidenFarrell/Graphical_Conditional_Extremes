@@ -1,6 +1,6 @@
 ################################################################################
 ## Reading in required packages
-required_pckgs <- c("LaplacesDemon")
+required_pckgs <- c("LaplacesDemon", "rlang")
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
