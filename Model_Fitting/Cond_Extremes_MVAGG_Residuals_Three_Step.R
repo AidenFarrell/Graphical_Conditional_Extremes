@@ -1,6 +1,6 @@
 ################################################################################
 ## Reading in required packages
-required_pckgs <- c("glasso")
+required_pckgs <- c("gtools", "glasso")
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
