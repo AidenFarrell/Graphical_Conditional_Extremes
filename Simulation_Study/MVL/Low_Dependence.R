@@ -1,7 +1,7 @@
 ################################################################################
 #Load in required packages
 rm(list = ls())
-required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "parallel")
+required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "kableExtra", "parallel", "rlang")
 # install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
@@ -26,6 +26,34 @@ source("Model_Fitting/Cond_Extremes_MVAGG_Residuals_Three_Step.R")
 ## Read in functions for prediction
 source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
+
+################################################################################
+out <- readRDS("Data/MVL_Low_Dependence_D5.RData")
+
+## Obtain the true parameters
+g_true <- out$par_true$graph
+d <- length(V(g_true))
+n_sim <- out$par_true$n_sim
+n_data <- out$par_true$n_data
+
+mu_true <- out$par_true$mu
+Gamma_true <- out$par_true$Gamma
+
+Sigma_true <- solve(Gamma_true)
+rho_true <- cov2cor(Sigma_true)
+
+## Transforms
+X_to_Y <- out$transforms
+
+## Obtain the data
+X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+
+## Get the output from the GPD fits
+u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
 
 ################################################################################
 ## plotting functions for later
@@ -116,17 +144,9 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
   return(plot_out)
 }
 
-## Function to calculate the RMSE of a sample
-RMSE <- function(x, xhat){
-  (mean((x - xhat)^2))^(1/2)
-}
-
-## Function to calculate the absolute bias of a sample
-Bias <- function(x, xhat){
-  mean(abs(x - xhat))
-}
-
 ################################################################################
+## DO NOT RUN
+
 ## Set up the simulation study
 
 ## True graph
@@ -140,17 +160,24 @@ g_true <- graph(edges = edges, directed = FALSE)
 plot.igraph(g_true)
 
 ## Generate a precision matrix with this structure and get Sigma
-seed <- -1746619488
+seed <- -1012705188
 set.seed(seed)
 simul <- SimulatePrecision(theta = as.matrix(as_adjacency_matrix(g_true)), v_sign = -1,
                            v_within = c(0.3, 0.7))
 Gamma_true <- simul$omega
+
+## Print for inclusion in paper
+round(Gamma_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
+
 Sigma_true <- solve(Gamma_true)
 rho_true <- cov2cor(Sigma_true)
-rho_true
 
-Sigma_true_i <- lapply(1:d, function(i){Cond_Sigma(Sigma_true, i)})
-rho_true_i <- lapply(Sigma_true_i, function(x){cov2cor(x)})
+## Print for inclusion in paper
+round(rho_true, 3) %>% 
+  kbl(format = "latex", col.names = 1:d, align = "c") %>% 
+  kable_classic(full_width = F, html_font = "Source Sans Pro")
 
 ## Mean parameter
 mu_true <- runif(d, -5, 5)
@@ -158,7 +185,6 @@ mu_true <- runif(d, -5, 5)
 ## number of simulations and data points
 n_sim <- 200
 n_data <- 5000
-dqu <- 0.9
 n_exceedances <- 500
 
 ## Simulate the data
@@ -184,8 +210,10 @@ scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y})})
 
+################################################################################
+
 ## Now we want to subset the data so that each component is large in turn
-Y_u <- lapply(Y, function(x){apply(x, 2, quantile, probs = dqu)})
+dqu <- 0.9
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -234,23 +262,21 @@ fit_One_Step_Graph <- lapply(1:d, function(i){
            start = start_par_One_Step[[i]],
            MoreArgs = list(graph = g_true,
                            cond = i,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 5),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
 ## Two-step model fits
-start_par_Two_Step <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
-  cbind(loc_start_One_Step[[j]][[k]], rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))})})
-
 ## Graphical
 fit_Two_Step_Graph <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG_Two_Step,
            data = Y_Yi_large[[i]],
-           start_AGG = start_par_Two_Step[[i]],
            MoreArgs = list(graph = g_true,
                            cond = i,
                            v = ceiling(max(sapply(Y, max))) + 1,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -319,7 +345,8 @@ while(any(sapply(Index_One_Step_Graph, length) > 0)){
                                   cond = i,
                                   graph = g_true,
                                   start = start_par_One_Step,
-                                  maxit = 1e+9),
+                                  maxit = 1e+9,
+                                  nOptim = 5),
               silent = TRUE)
       }
     }
@@ -356,8 +383,9 @@ while(any(sapply(Index_Two_Step_Graph, length) > 0)){
                                            cond = i,
                                            graph = g_true,
                                            v = ceiling(max(sapply(Y, max))) + 1,
-                                           start = start_par_Two_Step,
-                                           maxit = 1e+9),
+                                           start_AGG = start_par_Two_Step,
+                                           maxit = 1e+9,
+                                           nOptim = 2),
               silent = TRUE)
       }
     }
@@ -534,6 +562,10 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
   labs(x = substitute(hat(kappa[1])), y = substitute(hat(kappa[2]))) + 
+  lims(x = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
+             ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1),
+       y = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
+             ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1)) +
   facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
 dev.off()
 
@@ -786,7 +818,7 @@ for(i in 1:d){
 Bias_Winner$Total <- rowSums(Bias_Winner)
 Bias_Winner
 
-################################################################################
+###############################################################################
 ## Get a conditional survival curve for all the univariate probabilities
 
 ## threshold above which to calculate the probabilities
@@ -824,36 +856,6 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
              SIMPLIFY = TRUE,
              mc.cores = detectCores() - 1)}))
   return(cond_serv_out)
-}
-
-cond_surv_curve_plot <- function(p_true, p_model, u_dep, sig_level, methods, x_lab, y_lab, title_lab){
-  
-  if(sig_level <= 0 | sig_level >= 0.5){
-    stop("sig_level is the significance level of the confidence interval and must lie in range (0, 0.5)")
-  }
-  ## get some info from the model
-  n_sim <- ncol(p_model[[1]])
-  n_p <- nrow(p_model[[1]])
-  n_methods <- length(methods)
-  
-  ## get the bias in the model probability
-  p_true_mat <- matrix(p_true, nrow = n_p, ncol = n_sim, byrow = FALSE)
-  bias_p <- lapply(p_model, function(x){x - p_true_mat})
-  bias_p_ci <- lapply(bias_p, function(x){apply(x, 1, quantile, probs = c(sig_level/2, 1 - sig_level/2))})
-  
-  plot_data <- data.frame(x_vals = rep(c(u_dep, rev(u_dep)), n_methods),
-                          y_vals = do.call(c, lapply(bias_p_ci, function(x){
-                            c(x[1,], rev(x[2,]))
-                          })),
-                          Model = rep(methods, each = n_p*2))
-  plot_data$Model <- factor(plot_data$Model, levels = methods)
-  
-  plot_out <- ggplot(data = plot_data, aes(x = x_vals, y = y_vals)) + 
-    geom_polygon(aes(fill = Model), alpha = 0.5) +
-    theme(legend.position = "top") +
-    labs(x = x_lab, y = y_lab, title = title_lab) +
-    geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
-  return(plot_out)
 }
 
 u_dep <- lapply(1:d, function(i){
@@ -950,3 +952,35 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   )
 dev.off()
 
+## 2 x 2 plot of the above for one conditioning variable
+for(i in 1:d){
+  label_x <- function(labels) {
+    sapply(labels, function(label) {
+      substitute("P(" ~ X[label] > u[label] ~ "|" ~ X[i] > u[i] ~ ")", list(label = label, i = i))
+    })
+  }
+  bias_ci_df_cond <- bias_ci_df[which(bias_ci_df$Conditioning_Variable == i),]
+  bias_ci_df_cond <- bias_ci_df_cond[-which(bias_ci_df_cond$Dependent_Variable == i),]
+  pdf(file = paste0("Images/Simulation_Study/MVL/Low_Dependence/Probabilities/MVL_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
+  p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
+    geom_polygon(aes(fill = Method), alpha = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+    theme(legend.position = "top") +
+    labs(x = "u (Dependent Variable)", y = "Bias") +
+    facet_wrap(~ Dependent_Variable,
+               nrow = 2, ncol = 2,
+               scales = "free_x",
+               labeller = labeller(
+                 Conditioning_Variable = as_labeller(label_y, default = label_parsed),
+                 Dependent_Variable = as_labeller(label_x, default = label_parsed)
+               )
+    )
+  print(p)
+  dev.off() 
+}
+################################################################################
+# out <- list(transforms = X_to_Y,
+#             par_true = list(n_sim = n_sim, n_data = n_data,
+#                             mu = mu_true, Gamma = Gamma_true, graph = g_true))
+# saveRDS(out, file = "Data/MVL_Low_Dependence_D5.RData")
+################################################################################
