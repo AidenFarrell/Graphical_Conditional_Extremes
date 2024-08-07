@@ -59,7 +59,7 @@ for(i in 1:nrow(ai_pairs)){
   lines(x = chi_test$quantile, y = eta_test$eta[,3], lty = "dashed")
 }
 
-## display sites 19 and and 29 and 19 and 31
+## display sites 19 and 29 and 19 and 16
 
 ## 19 and 29
 dep_plots <- list()
@@ -89,12 +89,12 @@ dep_plots[[3]] <- ggplot() + geom_polygon(data = data.frame(x = c(chi_test$quant
   lims(x = c(0, 1), y = c(-1, 1)) +
   labs(x = "Quantile", y = expression(chi(u)))
 
-## 19 and 31
-dep_plots[[4]] <- ggplot(data = data.frame(x = data_frechet[,19], y = data_frechet[,31]), aes(x = x, y = y)) +
+## 19 and 16
+dep_plots[[4]] <- ggplot(data = data.frame(x = data_frechet[,19], y = data_frechet[,16]), aes(x = x, y = y)) +
   geom_point() +
-  labs(x = "Station 19", y = "Station 31")
+  labs(x = "Station 19", y = "Station 16")
 
-chi_test <- texmex::chi(data = danube$data_clustered[,c(19,31)])
+chi_test <- texmex::chi(data = danube$data_clustered[,c(19,16)])
 chi_test$chiulb[is.infinite(chi_test$chiulb)] <- NA
 dep_plots[[5]] <- ggplot() + geom_polygon(data = data.frame(x = c(chi_test$quantile, rev(chi_test$quantile)),
                                                             y = c(chi_test$chibar[,1], rev(chi_test$chibar[,3]))),
@@ -108,8 +108,8 @@ dep_plots[[5]] <- ggplot() + geom_polygon(data = data.frame(x = c(chi_test$quant
 
 dep_plots[[6]] <- ggplot() + geom_polygon(data = data.frame(x = c(chi_test$quantile, rev(chi_test$quantile)),
                                                             y = c(chi_test$chi[,1], rev(chi_test$chi[,3]))),
-                                          aes(x = x, y = y), fill = alpha(colour = "grey", alpha = 0.5)) +
-  geom_line(data = data.frame(x = chi_test$quantile, y = chi_test$chi[,2]), aes(x = x, y = y), col = "grey") +
+                                          aes(x = x, y = y), fill = alpha(colour = "orange", alpha = 0.5)) +
+  geom_line(data = data.frame(x = chi_test$quantile, y = chi_test$chi[,2]), aes(x = x, y = y), col = "blue") +
   geom_line(data = data.frame(x = chi_test$quantile, y = chi_test$chiulb), aes(x = x, y = y), col = "black", linetype = "dashed") +
   geom_line(data = data.frame(x = chi_test$quantile, y = 0), aes(x = x, y = y), col = "black", linetype = "dashed") +
   geom_line(data = data.frame(x = chi_test$quantile, y = 1), aes(x = x, y = y), col = "black", linetype = "dashed") +
