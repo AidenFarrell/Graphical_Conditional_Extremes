@@ -115,7 +115,7 @@ llh_agg <- function(x, par, negative = FALSE){
 ## Fit the log-likelihood for the model using optim
 fit_agg <- function(par, data){
   ## checks
-  if(!is.vector(data)){stop("data must be a vector")}
+  if(!is.numeric(data)){stop("data must be a vector")}
   if(length(par) != 4){stop("invalid number of parameters")}
   
   ## Fit the model
