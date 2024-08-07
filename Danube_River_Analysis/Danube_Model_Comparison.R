@@ -93,10 +93,10 @@ Y <- unname(sapply(X_to_Y, function(x){unname(x$data$Y)}))
 dqu <- ceiling(max(qu_final)/0.01)*0.01
 dqu <- 0.8
 
-Y_u <- qlaplace(dqu)
+Y_u <- apply(Y, 2, quantile, dqu)
 Y_Yi_large <- rep(list(list()), d)
 for(i in 1:d){
-  Y_Yi_large[[i]] <- Y[which(Y[,i] > Y_u),]
+  Y_Yi_large[[i]] <- Y[which(Y[,i] > Y_u[i]),]
 }
 
 ################################################################################
@@ -110,7 +110,7 @@ for(i in 1:d){
   q_empirical <- quantile(excesses_station, p)
   q_theoretical <- qgpd(p, shape_final[i], scale = scale_final[i], mu = u_final[i])
   
-  ## bootstrapped emprical CI
+  ## bootstrapped empirical CI
   n_boot <- 250
   boot_data <- replicate(n = n_boot,
                          expr = danube$data_clustered[sample(x = 1:n_data, size = n_data, replace = TRUE),],
