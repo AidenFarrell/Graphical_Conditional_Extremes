@@ -69,7 +69,7 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
     start_HT <- matrix(0.1, nrow = d-1, ncol = 2)
   }
   if(missing(start_AGG)){
-    start_AGG <- matrix(rep(c(0, 1, 2, 1.5), d-1), nrow = d-1, ncol = 4, byrow = TRUE)
+    start_AGG <- matrix(rep(c(0, 1.5, 2, 1.5), d-1), nrow = d-1, ncol = 4, byrow = TRUE)
   }
   else if(!is.numeric(start_HT) | !is.numeric(start_AGG)){
     stop("start_HT and start_AGG must be vectors")
