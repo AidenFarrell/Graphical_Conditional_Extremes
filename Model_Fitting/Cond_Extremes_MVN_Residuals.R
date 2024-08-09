@@ -278,7 +278,7 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
     }
     else{
       for(i in 2:nOptim){
-        fit <- try(optim(par = par_start <- fit$par, fn = Qpos, control = list(maxit = maxit),
+        fit <- try(optim(par = fit$par, fn = Qpos, control = list(maxit = maxit),
                          yex = yex, ydep = ydep, negative = TRUE,
                          constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
                    silent = TRUE)
@@ -356,7 +356,7 @@ qfun_MVN_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
       z <- (ydep - a_yi)/b_yi
       
       ## Use a graphical lasso to fit the graphical structure to the residuals
-      Sigma_start <- cov(z)
+      Sigma_start <- cor(z)
       if(any(is.infinite(Sigma_start)) | any(is.na(Sigma_start)) | any(is.nan(Sigma_start))){
         return((-10^10)*(-1)^negative)
       }
@@ -482,7 +482,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
       
       ## Now maximise assuming the residuals have a saturated Gaussian model
       mu_z <- matrix(rep(apply(z, 2, mean), n), ncol = d, byrow = TRUE)
-      chol_Gamma <- chol(solve(cov(z)))
+      chol_Gamma <- chol(solve(cor(z)))
       y <- chol_Gamma%*%t(z - mu_z)
       llh_z <- -n*d*log(2*pi)/2 - n*sum(log(1/diag(chol_Gamma))) - sum(y^2)/2
       res <- (llh_z - sum(log(b_yi)))
@@ -558,7 +558,7 @@ qfun_MVN_full <- function(yex, ydep, maxit, start, nOptim){
     
     ## Organise the output
     out <- list()
-    out$par <- list(a = a_hat, b = b_hat, mu = apply(Z, 2, mean), Gamma = solve(cov(Z)))
+    out$par <- list(a = a_hat, b = b_hat, mu = apply(Z, 2, mean), Gamma = solve(cor(Z)))
     out$value <- fit$value
     out$convergence <- fit$convergence
     out$Z <- Z
