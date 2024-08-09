@@ -172,7 +172,7 @@ seed <- -1776067839
 set.seed(seed)
 
 ## True graph
-d <- 200
+d <- 500
 prop_edges <- 0.1
 all_edges <- combinations(n = d, r = 2, v = 1:d)
 edges <- t(all_edges[sample(x = 1:nrow(all_edges), size = nrow(all_edges)*prop_edges, replace = FALSE),])
@@ -225,4 +225,4 @@ for(i in 1:d){
 }
 
 colnames(times) <- c("HT", "AGG", "Transform", "Graph", "Full")
-round(apply(times, 2, mean), 2)
+print(round(apply(times, 2, mean), 2))
