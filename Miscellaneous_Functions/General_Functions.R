@@ -17,14 +17,21 @@ Cond_Sigma <- function(x, j){
   }
   
   d <- dim(x)[1] + 1
-  if(j < 0 | j > d | j%%1 != 0){
-    stop("j must be a positive integer between 1 and d")
+  if(!is.numeric(j) | length(j) > d - 1){
+    stop("j must be a vector of length at most d-1")
+  }
+  else if(any(j < 0) | any(j > d) | any(j%%1 != 0)){
+    stop("j must be a vector of positive integers between 1 and d")
   }
   
-  Sigma_11 <- x[-j,-j]
-  Sigma_12 <- x[j,-j]
-  Sigma_22 <- x[j,j]
-  Sigma_bar <- Sigma_11 - Sigma_12%*%solve(Sigma_22)%*%t(Sigma_12)
+  Sigma_11 <- as.matrix(x[j,j])
+  Sigma_12 <- as.matrix(x[j,-j])
+  if(length(j) == 1){
+    Sigma_12 <- t(Sigma_12)
+  }
+  Sigma_21 <- as.matrix(x[-j,j])
+  Sigma_22 <- as.matrix(x[-j,-j])
+  Sigma_bar <- Sigma_22 - Sigma_21%*%solve(Sigma_11)%*%Sigma_12
   return(Sigma_bar)
 }
 
