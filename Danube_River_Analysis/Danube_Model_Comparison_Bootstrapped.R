@@ -126,26 +126,26 @@ flow_connected <- as.data.frame(flow_connected)
 ################################################################################
 ## DO NOT RUN
 
-## Bootstrap the data
-n_boot <- 200
-n_data <- nrow(danube$data_clustered)
-set.seed(seed)
-danube_boot <- replicate(n = n_boot, 
-                         expr = danube$data_clustered[sample(x = 1:n_data, n_data, replace = TRUE),],
-                         simplify = FALSE)
-
-## Transform data onto standard Laplace margins using the Coles and Tawn Method
-danube_boot_list <- lapply(danube_boot, function(x){
-  lapply(apply(x, 2, list), function(x){x[[1]]})})
-
-X_to_Y <- lapply(1:n_boot, function(i){
-  mcmapply(FUN = X_to_Laplace,
-           x = danube_boot_list[[i]],
-           MoreArgs = list(q = seq(0.55, 0.925, by = 0.01)),
-           SIMPLIFY = FALSE,
-           mc.cores = detectCores() - 1)})
-
-saveRDS(X_to_Y, file = "Data/Danube_Bootstrapped.RData")
+# ## Bootstrap the data
+# n_boot <- 200
+# n_data <- nrow(danube$data_clustered)
+# set.seed(seed)
+# danube_boot <- replicate(n = n_boot, 
+#                          expr = danube$data_clustered[sample(x = 1:n_data, n_data, replace = TRUE),],
+#                          simplify = FALSE)
+# 
+# ## Transform data onto standard Laplace margins using the Coles and Tawn Method
+# danube_boot_list <- lapply(danube_boot, function(x){
+#   lapply(apply(x, 2, list), function(x){x[[1]]})})
+# 
+# X_to_Y <- lapply(1:n_boot, function(i){
+#   mcmapply(FUN = X_to_Laplace,
+#            x = danube_boot_list[[i]],
+#            MoreArgs = list(q = seq(0.55, 0.925, by = 0.01)),
+#            SIMPLIFY = FALSE,
+#            mc.cores = detectCores() - 1)})
+# 
+# saveRDS(X_to_Y, file = "Data/Danube_Bootstrapped.RData")
 ################################################################################
 # ## Read in data
 X_to_Y <- readRDS("Data/Danube_Bootstrapped.RData")
