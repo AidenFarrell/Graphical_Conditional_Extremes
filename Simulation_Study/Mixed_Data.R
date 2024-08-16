@@ -1,53 +1,33 @@
 ################################################################################
 #Load in required packages
 rm(list = ls())
-required_pckgs <- c("fake", "ggplot2", "ggpubr", "gtools", "graphicalExtremes", "igraph", "kableExtra", "mev", "parallel", "purrr", "rlang")
-required_pckgs <- c("evd", "ggplot2", "graphicalExtremes", "igraph", "parallel")
+required_pckgs <- c("fake", "ggplot2", "graphicalExtremes", "igraph", "parallel")
 # install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
-seed <- -557288409
-set.seed(seed)
-
-################################################################################
-## conditional mean from a bivariate Guassian distribution
-means_cond <- function(y, mean1 = 1, mean2, sd1 = 1, sd2, rho){
-  mean1 + (sd1/sd2)*rho*(y - mean2)
-}
-
-## conditional standard deviation from a bivariate Guassian distribution
-sds_cond <- function(sd1 = 1, rho){
-  sqrt((sd1^2)*(1 - rho^2))
-}
-
 ## Algorithm to generate data with mixed dependence structures
-mixed_data_generation <- function(n_data, graph_inner, graph_full, Gamma_inner, rho_outer){
-  
-  ## Number of parameters for the inner star graph and the outer star graph
-  p_inner <- length(E(graph_inner))
-  p_outer <- length(E(graph_full)) - p_inner
+mixed_data_generation <- function(n_data, Gamma_MVP, Sigma_MVN){
   
   ## Generate the inner star graph using a MVP distribution
-  data_inner_Pareto <- rmpareto(n = n_data, model = "HR", par = Gamma_inner)
+  data_Pareto <- rmpareto(n = n_data, model = "HR", par = Gamma_MVP)
   
-  ## Transform the data onto standard Gaussian margins and get mean and sd
-  data_inner_Gaussian <- qnorm(apply(data_inner_Pareto, 2, pfrechet))
-  mean_inner <- apply(data_inner_Gaussian, 2, mean)
-  sd_inner <- apply(data_inner_Gaussian, 2, sd)
+  ## Transform the data onto standard Gaussian margins
+  data_Gaussian <- qnorm(apply(data_Pareto, 2, rank)/(n_data + 1))
   
-  ## Get mean and sd for the outer edges
-  means_outer <- sapply(1:p_outer, function(i){
-    means_cond(y = data_inner_Gaussian[,i+1], mean2 = mean_inner[i+1], sd2 = sd_inner[i+1], rho = rho_outer[i])
-  })
-  sds_outer <- sds_cond(rho = rho_outer)
+  ## Get conditional mean and correlation matrix given X3
+  mean_cond <- sapply(Sigma_MVN[1,-1], function(x){x*data_Gaussian[,3]})
+  Sigma_cond <- Cond_Sigma(Sigma_MVN, 1)
+  rho_cond <- cov2cor(Sigma_cond)
   
-  ## Generate the outer edges using a conditional normal distribution
-  data_outer <- sapply(1:p_outer, function(i){
-    rnorm(n = n_data, mean = means_outer[,i], sd = rep(sds_outer[i], n_data)) 
-  })
+  ## Obtain remaining data conditional on X3
+  data_MVN <- matrix(NA, nrow = n_data, ncol = 2)
+  for(i in 1:n_data){ 
+    data_MVN[i,] <- mvtnorm::rmvnorm(n = 1, mean = mean_cond[i,], sigma = rho_cond)
+  }
   
-  data_all <- cbind(data_inner_Gaussian, data_outer)
+  ## return all data
+  data_all <- cbind(data_Gaussian, data_MVN)
   return(data_all)
 }
 
@@ -85,7 +65,8 @@ boxplot_MLEs <- function(data, methods, y_lab){
   print(plot_out)
 }
 
-boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cor_mat_true, precision = FALSE){
+
+boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
   
   ## Obtain some information from the data
   if(!is.list(data)){
@@ -99,24 +80,11 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cor_mat_true, precis
   ## get some plotting parameters
   x_labels <- apply(combinations(n = d_data, r = 2, v = 1:d_data, repeats.allowed = TRUE), 1, paste0, collapse = "")
   
-  ## Get the true parameters in the correct form
-  if(precision){
-    cor_mat_true <- lapply(cor_mat_true, solve)
-  }
-  cor_mat_true_NA <- lapply(1:d_data, function(i){Add_NA_Matrix(cor_mat_true[[i]], i)})
-  lower_tri_elements <- lower.tri(cor_mat_true_NA[[1]], diag = TRUE)
-  cor_mat_true_NA <- lapply(1:d_data, function(i){cor_mat_true_NA[[i]][lower_tri_elements]})
-  
-  ## get the bias
-  data_bias <- lapply(1:d_data, function(i){lapply(1:n_methods, function(j){
-    data[[i]][[j]] - matrix(rep(cor_mat_true_NA[[i]], n), nrow = n, byrow = TRUE)
-  })})
-  
   ## Construct the plotting data
   plot_data <- data.frame(y = do.call(c, lapply(1:d_data, function(i){
     do.call(c, lapply(1:p, function(j){
       do.call(c, lapply(1:n_methods, function(k){
-        data_bias[[i]][[k]][,j]}))}))})))
+        data[[i]][[k]][,j]}))}))})))
   
   plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
   plot_data$Method <- factor(plot_data$Method, levels = methods)
@@ -132,8 +100,8 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cor_mat_true, precis
     geom_boxplot() +
     theme(legend.position = "top") +
     labs(x = "Pair", y = y_lab) +
-    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
-    geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
+    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
+               scales = "free_y")
   
   return(plot_out)
 }
@@ -157,52 +125,46 @@ source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
 
 ################################################################################
-## Inner graph
-graph_inner <- igraph::make_star(n = 3, mode = "undirected")
-plot(graph_inner)
+## DO NOT RUN
 
-## Outer graph
-edges_full <- rbind(as_edgelist(graph_inner), c(2,4), c(3,5))
+## Set the seed
+seed <- 968562880
+set.seed(seed)
+
+## AD clique graph
+graph_1 <- make_full_graph(n = 3)
+plot(graph_1)
+
+## Full graph
+edges_full <- rbind(as_edgelist(graph_1), c(3,4), c(3,5), c(4,5))
 graph_full <- graph_from_edgelist(edges_full, directed = FALSE)      
 plot(graph_full)
 
 ## Simulate the inner graph data
 d <- length(V(graph_full))
-n_data <- 1000
+n_data <- 5000
 
 ## Get the precision matrix for the inner graph
-p_inner <- length(E(graph_inner))
-Gamma_inner <- complete_Gamma(runif(p_inner, min = 0.5, max = 1), graph = graph_inner) 
+p_MVP <- length(E(graph_1))
+Gamma_MVP <- complete_Gamma(runif(p_MVP, min = 0.5, max = 1), graph = graph_1)
 
 ## Get the correlations for the outer edges
-p_outer <- length(E(graph_full)) - p_inner
-rho_outer <- runif(p_outer, 0.5, 0.75)
+simul <- SimulatePrecision(theta = as.matrix(as_adjacency_matrix(graph_1)), v_sign = -1,
+                           v_within = c(0.999, 0.99999))
+Gamma_MVN <- simul$omega
+Sigma_MVN <- solve(Gamma_MVN)
+rho_MVN <- cov2cor(Sigma_MVN)
 
 ## Generate the data
-n_sim = 10
-test_out <- replicate(n = n_sim,
-                      expr = mixed_data_generation(n_data = n_data,
-                                                   graph_inner = graph_inner,
-                                                   graph_full = graph_full,
-                                                   Gamma_inner = Gamma_inner,
-                                                   rho_outer = rho_outer),
-                      simplify = FALSE)
-
-debug(mixed_data_generation)
-mixed_data_generation(n_data = n_data,
-                      graph_inner = graph_inner,
-                      graph_full = graph_full,
-                      Gamma_inner = Gamma_inner,
-                      rho_outer = rho_outer)
-
-lapply(test_out, cor)
-
-Reduce("+", lapply(test_out, function(x){solve(cov2cor(Cond_Sigma(cov(x), 1)))}))/n_sim
-
-Reduce("+", lapply(test_out, function(x){solve(cor(x))}))/n_sim
+n_sim = 200
+X <- replicate(n = n_sim,
+               expr = mixed_data_generation(n_data = n_data,
+                                            Gamma_MVP = Gamma_MVP,
+                                            Sigma_MVN = Sigma_MVN),
+               simplify = FALSE)
 
 ## Transform the data onto standard Laplace margins
-X_list_by_data <- lapply(test_out, function(x){lapply(apply(x, 2, list), function(y){y[[1]]})})
+X_list_by_data <- lapply(X, function(x){lapply(apply(x, 2, list), function(y){y[[1]]})})
 X_list_by_var <- lapply(1:d, function(i){lapply(1:n_sim, function(j){X_list_by_data[[j]][[i]]})})
 X_to_Y <- lapply(X_list_by_var, function(x){
   mcmapply(x = x,
@@ -218,6 +180,34 @@ scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$data$Y)})})
 
+################################################################################
+## Read in data
+out <- readRDS("Data/Mixed_Data_D5.RData")
+
+## Obtain the true parameters
+graph_full <- out$par_true$graph
+d <- length(V(graph_full))
+n_sim <- out$par_true$n_sim
+n_data <- out$par_true$n_data
+
+Gamma_MVP <- out$par_true$Gamma_MVP
+Gamma_MVN <- out$par_true$Gamma_MVN
+
+## Transforms
+X_to_Y <- out$transforms
+
+## Obtain the data
+X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+
+## Get the output from the GPD fits
+u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
+
+################################################################################
+
 ## Now we want to subset the data so that each component is large in turn
 dqu <- 0.9
 Y_u <- qlaplace(dqu)
@@ -232,14 +222,21 @@ for(i in 1:d){
 }
 
 ################################################################################
+## Fit the various models
+
+## Fit the Engelke and Hitz model to the data for comparative purposes
+fit_EH <- lapply(X, function(x){
+  fmpareto_graph_HR(data = x, graph = graph_full, p = dqu,
+                    method = "vario", handleCliques = "average")})
 
 ## Heffernan and Tawn model
+v <- ceiling(max(sapply(Y, max))) + 1
 fit_HT <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVN,
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = NA,
                            cond = i,
-                           v = ceiling(max(sapply(Y, max))) + 1,
+                           v = v,
                            maxit = 1e+9),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
@@ -278,7 +275,7 @@ fit_Two_Step_Graph <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
-                           v = ceiling(max(sapply(Y, max))) + 1,
+                           v = v,
                            maxit = 1e+9,
                            nOptim = 2),
            SIMPLIFY = FALSE,
@@ -291,7 +288,7 @@ fit_Three_Step_Indep <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = NA,
                            cond = i,
-                           v = ceiling(max(sapply(Y, max))) + 1,
+                           v = v,
                            maxit = 1e+9),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
@@ -302,7 +299,7 @@ fit_Three_Step_Graph <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
-                           v = ceiling(max(sapply(Y, max))) + 1,
+                           v = v,
                            maxit = 1e+9),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
@@ -313,15 +310,10 @@ fit_Three_Step_Full <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = make_full_graph(n = d),
                            cond = i,
-                           v = ceiling(max(sapply(Y, max))) + 1,
+                           v = v,
                            maxit = 1e+9),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
-
-## Fit the Engelke and Hitz model to the data for comparative purposes
-fit_EH <- lapply(test_out, function(x){
-  fmpareto_graph_HR(data = x, graph = graph_full, p = dqu,
-                    method = "vario", handleCliques = "average")})
 
 ################################################################################
 ## One and two step models can be somewhat sensitive to the starting values
@@ -386,7 +378,7 @@ while(any(sapply(Index_Two_Step_Graph, length) > 0)){
           try(Cond_Extremes_MVAGG_Two_Step(data = Y_Yi_large[[i]][[ind[j]]],
                                            cond = i,
                                            graph = graph_full,
-                                           v = ceiling(max(sapply(Y, max))) + 1,
+                                           v = v,
                                            start_AGG = start_par_Two_Step,
                                            maxit = 1e+9),
               silent = TRUE)
@@ -401,6 +393,120 @@ while(any(sapply(Index_Two_Step_Graph, length) > 0)){
   
   Index_Two_Step_Graph <- lapply(fit_Two_Step_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
   if(all(sapply(Index_Two_Step_Graph, length) == 0)){
+    print("Model Fitting Complete")
+  }
+}
+
+## Might have some issues with the three-step model due to the differing
+## dependence structures
+## Code may need a slight edit to update ranges of sampling for starting parameters
+Index_Three_Step_Indep <- lapply(fit_Three_Step_Indep, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+count <- 0
+while(any(sapply(Index_Three_Step_Indep, length) > 0)){
+  for(i in 1:d){
+    if(is_empty(Index_Three_Step_Indep[[i]])){
+      next()
+    }
+    else{
+      start_par_HT <- c(runif(2, min = 0.1, max = 0.3))
+      start_par_AGG <- c(runif(1, -2, 2), runif(1, 0.5, 5), runif(1, 0.5, 5), runif(1, 0.5, 3))
+      
+      ind <- Index_Three_Step_Indep[[i]]
+      for(j in 1:length(ind)){
+        fit_Three_Step_Indep[[i]][[ind[j]]] <-
+          try(Cond_Extremes_MVAGG_Three_Step(data = Y_Yi_large[[i]][[ind[j]]],
+                                             cond = i,
+                                             graph = NA,
+                                             v = v,
+                                             start_HT = start_par_HT,
+                                             start_AGG = start_par_AGG,
+                                             maxit = 1e+9),
+              silent = TRUE)
+      }
+    }
+  }
+  count <- count + 1
+  print(paste0(count, " set of starting parameters tested"))
+  if(count >= 50){
+    stop("50 starting values attempted")
+  }
+  
+  Index_Three_Step_Indep <- lapply(fit_Three_Step_Indep, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+  if(all(sapply(Index_Three_Step_Indep, length) == 0)){
+    print("Model Fitting Complete")
+  }
+}
+
+Index_Three_Step_Graph <- lapply(fit_Three_Step_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+count <- 0
+while(any(sapply(Index_Three_Step_Graph, length) > 0)){
+  for(i in 1:d){
+    if(is_empty(Index_Three_Step_Graph[[i]])){
+      next()
+    }
+    else{
+      start_par_HT <- c(runif(2, min = 0.1, max = 0.3))
+      start_par_AGG <- c(runif(1, -2, 2), runif(1, 0.5, 5), runif(1, 0.5, 5), runif(1, 0.5, 3))
+      
+      ind <- Index_Three_Step_Graph[[i]]
+      for(j in 1:length(ind)){
+        fit_Three_Step_Graph[[i]][[ind[j]]] <-
+          try(Cond_Extremes_MVAGG_Three_Step(data = Y_Yi_large[[i]][[ind[j]]],
+                                             cond = i,
+                                             graph = g_true,
+                                             v = v,
+                                             start_HT = start_par_HT,
+                                             start_AGG = start_par_AGG,
+                                             maxit = 1e+9),
+              silent = TRUE)
+      }
+    }
+  }
+  count <- count + 1
+  print(paste0(count, " set of starting parameters tested"))
+  if(count >= 50){
+    stop("50 starting values attempted")
+  }
+  
+  Index_Three_Step_Graph <- lapply(fit_Three_Step_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+  if(all(sapply(Index_Three_Step_Graph, length) == 0)){
+    print("Model Fitting Complete")
+  }
+}
+
+Index_Three_Step_Full <- lapply(fit_Three_Step_Full, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+count <- 0
+while(any(sapply(Index_Three_Step_Full, length) > 0)){
+  for(i in 1:d){
+    if(is_empty(Index_Three_Step_Full[[i]])){
+      next()
+    }
+    else{
+      start_par_HT <- c(runif(2, min = 0.1, max = 0.3))
+      start_par_AGG <- c(runif(1, -2, 2), runif(1, 0.5, 5), runif(1, 0.5, 5), runif(1, 0.5, 3))
+      
+      ind <- Index_Three_Step_Full[[i]]
+      for(j in 1:length(ind)){
+        fit_Three_Step_Full[[i]][[ind[j]]] <-
+          try(Cond_Extremes_MVAGG_Three_Step(data = Y_Yi_large[[i]][[ind[j]]],
+                                             cond = i,
+                                             graph = make_full_graph(n = d),
+                                             v = v,
+                                             start_HT = start_par_HT,
+                                             start_AGG = start_par_AGG,
+                                             maxit = 1e+9),
+              silent = TRUE)
+      }
+    }
+  }
+  count <- count + 1
+  print(paste0(count, " set of starting parameters tested"))
+  if(count >= 50){
+    stop("50 starting values attempted")
+  }
+  
+  Index_Three_Step_Full <- lapply(fit_Three_Step_Full, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+  if(all(sapply(Index_Three_Step_Full, length) == 0)){
     print("Model Fitting Complete")
   }
 }
@@ -490,66 +596,69 @@ shape_hat_Three_Step_Full <- lapply(1:d, function(j){
 Gamma_hat_Three_Step_Full <- lapply(1:d, function(j){
   t(sapply(fit_Three_Step_Full[[j]], function(y){Add_NA_Matrix(as.matrix(y$par$Gamma), j)[lower_tri_elements]}))})
 
+## Engelke and Hitz model
+Gamma_hat_EH <- lapply(1:d, function(j){
+  t(sapply(fit_EH, function(y){Add_NA_Matrix(Gamma2Theta(y, k = j), j)[lower_tri_elements]}))})
+
 ################################################################################
 ## Assess convergence of the parameters
 method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
-p <- d
 
-y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
-           expression(hat(beta)[j ~ "|" ~ i]),
-           expression(hat(nu)[j ~ "|" ~ i]),
-           expression(hat(kappa[1])[j ~ "|" ~ i]),
-           expression(hat(kappa[2])[j ~ "|" ~ i]),
-           expression(hat(delta)[j ~ "|" ~ i]))
+# y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
+#            expression(hat(beta)[j ~ "|" ~ i]),
+#            expression(hat(nu)[j ~ "|" ~ i]),
+#            expression(hat(kappa[1])[j ~ "|" ~ i]),
+#            expression(hat(kappa[2])[j ~ "|" ~ i]),
+#            expression(hat(delta)[j ~ "|" ~ i]))
 
 # Alpha
-pdf(file = "Images/Simulation_Study/MVP/Alpha.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Alpha.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(a_hat_One_Step_Graph[[i]][,j],
           a_hat_Two_Step_Graph[[i]][,j],
           a_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[1])
+  methods = method_vec, y_lab = expression(hat(alpha)[j ~ "|" ~ i]))
 dev.off()
 
 # Beta
-pdf(file = "Images/Simulation_Study/MVP/Beta.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Beta.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(b_hat_One_Step_Graph[[i]][,j],
           b_hat_Two_Step_Graph[[i]][,j],
           b_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[2])
+  methods = method_vec, y_lab = expression(hat(beta)[j ~ "|" ~ i]))
 dev.off()
 
 # Location
-pdf(file = "Images/Simulation_Study/MVP/Location.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Location.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(loc_hat_One_Step_Graph[[i]][,j],
           loc_hat_Two_Step_Graph[[i]][,j],
           loc_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[3])
+  methods = method_vec, y_lab = expression(hat(nu)[j ~ "|" ~ i]))
 dev.off()
 
 # Scale (Left)
-pdf(file = "Images/Simulation_Study/MVP/Scale_Left.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Scale_Left.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(scale_1_hat_One_Step_Graph[[i]][,j],
           scale_1_hat_Two_Step_Graph[[i]][,j],
           scale_1_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[4])
+  methods = method_vec, y_lab = expression(hat(kappa[1])[j ~ "|" ~ i]))
 dev.off()
 
 # Scale (Right)
-pdf(file = "Images/Simulation_Study/MVP/Scale_Right.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Scale_Right.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(scale_2_hat_One_Step_Graph[[i]][,j],
           scale_2_hat_Two_Step_Graph[[i]][,j],
           scale_2_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[5])
+  methods = method_vec, y_lab = expression(hat(kappa[2])[j ~ "|" ~ i]))
 dev.off()
 
 ## check that the left and right scale are not the same
@@ -561,7 +670,7 @@ scale_plot_data <- data.frame(scale_1 = do.call(c, lapply(1:d, function(i){do.ca
 scale_plot_data$Conditioning_Variable <- factor(scale_plot_data$Conditioning_Variable, levels = 1:d, labels = sapply(1:d, function(k){substitute(i ~ "=" ~ j, list(j = k))}))
 scale_plot_data$Dependent_Variable <- factor(scale_plot_data$Dependent_Variable, levels = 1:d, labels = sapply(1:d, function(k){substitute(Y[j] ~ "|" ~ Y[i] > u[Y[i]], list(j = k))}))
 
-pdf(file = "Images/Simulation_Study/MVP/Scale_Comp.pdf", width = 15, height = 15)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Scale_Comp.pdf", width = 15, height = 15)
 ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
   geom_point() +
   geom_abline(intercept = 0, slope = 1, col = "red", linetype = "dashed", linewidth = 1) +
@@ -574,32 +683,255 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
 dev.off()
 
 # Shape
-pdf(file = "Images/Simulation_Study/MVP/Shape.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Shape.pdf", width = 15, height = 10)
 boxplot_MLEs(
-  data = lapply(1:d, function(i){do.call(cbind, lapply(1:p, function(j){
+  data = lapply(1:d, function(i){do.call(cbind, lapply(1:d, function(j){
     cbind(shape_hat_One_Step_Graph[[i]][,j],
           shape_hat_Two_Step_Graph[[i]][,j],
           shape_hat_Three_Step_Indep[[i]][,j])}))}),
-  methods = method_vec, y_lab = y_lab[6])
+  methods = method_vec, y_lab = expression(hat(delta)[j ~ "|" ~ i]))
 dev.off()
 
-## Precision matrix
-Sigma_data <- Reduce("+", lapply(test_out, function(x){cov(x)}))/n_sim
-Sigma_data_i <- lapply(1:d, function(i){Cond_Sigma(Sigma_data, i)})
-rho_data_i <- lapply(Sigma_data_i, cov2cor)
-
+## Precison matrix
 method_vec <- c("One-step - Graphical", "Two-step - Graphical",
-                "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
-p <- length(which(lower_tri_elements))
+                "Three-step - Graphical", "Three-step - Saturated")
 
-pdf(file = "Images/Simulation_Study/MVP/Gamma.pdf", width = 15, height = 10)
-boxplot_MLEs_Cov_Mat_Bias(
+pdf(file = "Images/Simulation_Study/Mixed_Data/Gamma.pdf", width = 15, height = 10)
+boxplot_MLEs_Cov_Mat(
   data = lapply(1:d, function(i){
     list(Gamma_hat_One_Step_Graph[[i]],
          Gamma_hat_Two_Step_Graph[[i]],
-         Gamma_hat_Three_Step_Indep[[i]],
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
-  methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)[~ "|" ~ i]), cor_mat_true = rho_data_i, precision = TRUE)
+  methods = method_vec, y_lab = expression(hat(Gamma)[~ "|" ~ i]))
 dev.off()
+################################################################################
+## Prediction
 
+## "true" probabilities from the underlying probability distribution which are calculated
+## using a point estimate from simulating a large number of data points from the
+## true distribution
+X_prob_calc <- mixed_data_generation(n_data = 1e+7,
+                                     Gamma_MVP = Gamma_MVP,
+                                     Sigma_MVN = Sigma_MVN)
+
+## Get the probabilities from the Engelke and Hitz model
+## Do this by simulating a data set of comparable size and transforming this back onto
+## the scale of the original data
+X_EH_Pareto <- lapply(fit_EH, function(x){rmpareto(n = n_data, model = "HR", par = x)})
+X_EH_Uniform <- lapply(X_EH_Pareto, function(x){apply(x, 2, rank)/(1 + n_data)})
+X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
+  texmex:::revTransform(x = X_EH_Uniform[[i]][,j],
+                        data = X[[i]][,j],
+                        qu = qu_final[[i]][j],
+                        th = u_final[[i]][j],
+                        sigma = scale_final[[i]][j],
+                        xi = shape_final[[i]][j],
+                        method = "mixture")})})
+
+## Heffernan and Tawn model
+X_HT <- mcmapply(FUN = Sim_Surface_HT,
+                 transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                 CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
+                 MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                 SIMPLIFY = FALSE,
+                 mc.cores = detectCores() - 1)
+
+## One-step graphical model
+X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
+                             transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                             CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
+                             MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                             SIMPLIFY = FALSE,
+                             mc.cores = detectCores() - 1)
+
+## Two-step graphical model
+X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
+                             transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                             CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
+                             MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                             SIMPLIFY = FALSE,
+                             mc.cores = detectCores() - 1)
+
+## Three-step independence model
+X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
+                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
+                               MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                               SIMPLIFY = FALSE,
+                               mc.cores = detectCores() - 1)
+
+## Three-step graphical model
+X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
+                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
+                               MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                               SIMPLIFY = FALSE,
+                               mc.cores = detectCores() - 1)
+
+## Three-step saturated model
+X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
+                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
+                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
+                              MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                              SIMPLIFY = FALSE,
+                              mc.cores = detectCores() - 1)
+
+## get the unconditioned random variables for probability estimation
+uncon <- lapply(1:d, function(i){sapply(1:(d-1), function(j){
+  combinations(n = d-1, r = j, v = (1:d)[-i])})})
+uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
+  lapply(apply(y, 1, list), function(z){z[[1]]})
+}))})
+
+## threshold above which to calculate the probabilities
+q_X <- 0.95
+u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
+
+p_true_X <- t(sapply(1:d, function(i){
+  sapply(uncon[[i]], function(z){
+    p_data_surv_multi(data = X_prob_calc, cond = i, u = u_X, uncon = z)})}))
+
+p_EH <- lapply(1:d, function(i){
+  t(sapply(X_EH_Original_Margins, function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_HT <- lapply(1:d, function(i){
+  t(sapply(lapply(X_HT, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_One_Step_Graph <- lapply(1:d, function(i){
+  t(sapply(lapply(X_One_Step_Graph, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_Two_Step_Graph <- lapply(1:d, function(i){
+  t(sapply(lapply(X_Two_Step_Graph, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_Three_Step_Indep <- lapply(1:d, function(i){
+  t(sapply(lapply(X_Three_Step_Indep, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_Three_Step_Graph <- lapply(1:d, function(i){
+  t(sapply(lapply(X_Three_Step_Graph, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+p_Three_Step_Full <- lapply(1:d, function(i){
+  t(sapply(lapply(X_Three_Step_Full, function(x){x$Data_Margins}), function(y){
+    sapply(uncon[[i]], function(z){
+      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+
+
+## Compare the probability estimation
+
+## Collate the output
+p_comp <- rep(list(vector("list", length(uncon[[1]]))), d)
+for(i in 1:d){
+  for(j in 1:length(uncon[[1]])){
+    p_comp[[i]][[j]] <- cbind(rep(p_true_X[i,j], n_sim),
+                              p_EH[[i]][,j],
+                              p_HT[[i]][,j],
+                              p_One_Step_Graph[[i]][,j],
+                              p_Two_Step_Graph[[i]][,j],
+                              p_Three_Step_Indep[[i]][,j],
+                              p_Three_Step_Graph[[i]][,j],
+                              p_Three_Step_Full[[i]][,j])
+  }
+}
+
+plot_titles <- rep(list(vector("list", length(uncon[[1]]))), d)
+for(i in 1:d){
+  for(j in 1:length(uncon[[1]])){
+    if(length(uncon[[i]][[j]]) == 1){
+      plot_titles[[i]][[j]] <- substitute(P(X[j] > u[j] ~ "|" ~ X[i] > u[i]), list(i = i, j = uncon[[i]][[j]]))
+    }
+    else if(length(uncon[[i]][[j]]) == 2){
+      plot_titles[[i]][[j]] <- substitute(P(X[j] > u[j], X[k] > u[k] ~ "|" ~ X[i] > u[i]), list(i = i, j = uncon[[i]][[j]][1], k = uncon[[i]][[j]][2]))
+    }
+    else if(length(uncon[[i]][[j]]) == 3){
+      plot_titles[[i]][[j]] <- substitute(P(X[j] > u[j], X[k] > u[k], X[l] > u[l] ~ "|" ~ X[i] > u[i]), list(i = i, j = uncon[[i]][[j]][1], k = uncon[[i]][[j]][2], l = uncon[[i]][[j]][3]))
+    }
+    else{
+      plot_titles[[i]][[j]] <- substitute(P(X[j] > u[j], X[k] > u[k], X[l] > u[l], X[m] > u[m] ~ "|" ~ X[i] > u[i]), list(i = i, j = uncon[[i]][[j]][1], k = uncon[[i]][[j]][2], l = uncon[[i]][[j]][3], m = uncon[[i]][[j]][4]))
+    }
+  }
+}
+
+# Compare the output above
+method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
+                "One-step - Graphical", "Two-step - Graphical",
+                "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
+method_vec_1 <- method_vec[-1]
+for(i in 1:d){
+  for(j in 1:length(uncon[[1]])){
+    ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
+    ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
+    
+    data_to_plot <- data.frame(Value = c(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1]))
+    data_to_plot$Model = rep(method_vec_1, each = n_sim)
+    data_to_plot$Model <- factor(data_to_plot$Model, levels = method_vec_1)
+    
+    pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
+    par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
+    p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
+      lims(y = c(ymin, max(0.4, ymax))) +
+      labs(y = "Bias", title = plot_titles[[i]][[j]]) +
+      theme(legend.position = c(.95, .95),
+            legend.justification = c("right", "top"),
+            legend.box.just = "right",
+            legend.margin = margin(6, 6, 6, 6),
+            legend.key.size = unit(0.75, 'cm'),
+            legend.title = element_text(size = 15),
+            legend.text = element_text(size = 10),
+            axis.text.x = element_blank(), 
+            axis.ticks.x = element_blank()) +
+      geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
+    print(p_plot)
+    dev.off()
+  }
+}
+
+## Summary output from the model
+
+## RMSE
+RMSE_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(2:length(method_vec), function(k){
+    RMSE(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+RMSE_min <- sapply(RMSE_out, function(x){apply(x, 1, which.min)})
+
+RMSE_Winner <- data.frame(matrix(0, ncol = d, nrow = length(method_vec_1)))
+rownames(RMSE_Winner) <- method_vec_1
+for(i in 1:d){
+  RMSE_Winner[as.numeric(names(table(RMSE_min[,i]))), i] <- table(RMSE_min[,i])
+}
+RMSE_Winner$Total <- rowSums(RMSE_Winner)
+RMSE_Winner
+
+## Bias
+Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(2:length(method_vec), function(k){
+    Bias(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+Bias_min <- sapply(Bias_out, function(x){apply(x, 1, which.min)})
+
+Bias_Winner <- data.frame(matrix(0, ncol = d, nrow = length(method_vec_1)))
+rownames(Bias_Winner) <- method_vec_1
+for(i in 1:d){
+  Bias_Winner[as.numeric(names(table(Bias_min[,i]))), i] <- table(Bias_min[,i])
+}
+Bias_Winner$Total <- rowSums(Bias_Winner)
+Bias_Winner
+
+################################################################################
+# out <- list(transforms = X_to_Y,
+#             par_true = list(n_sim = n_sim, n_data = n_data,
+#                             Gamma_MVP = Gamma_MVP, Gamma_MVN = Gamma_MVN, graph = graph_full))
+# saveRDS(out, file = "Data/Mixed_Data_D5.RData")
+################################################################################
