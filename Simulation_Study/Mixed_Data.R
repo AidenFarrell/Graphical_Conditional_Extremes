@@ -96,12 +96,13 @@ boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
   ## Define custom labels for facets
   facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
   
-  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method)) + 
-    geom_boxplot() +
+  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, col = Method)) + 
+    geom_boxplot(outlier.shape = NA) +
     theme(legend.position = "top") +
     labs(x = "Pair", y = y_lab) +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
-               scales = "free_y")
+               scales = "free_y") +
+    geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 0.25)
   
   return(plot_out)
 }
@@ -604,13 +605,6 @@ Gamma_hat_EH <- lapply(1:d, function(j){
 ## Assess convergence of the parameters
 method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
 
-# y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
-#            expression(hat(beta)[j ~ "|" ~ i]),
-#            expression(hat(nu)[j ~ "|" ~ i]),
-#            expression(hat(kappa[1])[j ~ "|" ~ i]),
-#            expression(hat(kappa[2])[j ~ "|" ~ i]),
-#            expression(hat(delta)[j ~ "|" ~ i]))
-
 # Alpha
 pdf(file = "Images/Simulation_Study/Mixed_Data/Alpha.pdf", width = 15, height = 10)
 boxplot_MLEs(
@@ -692,7 +686,7 @@ boxplot_MLEs(
   methods = method_vec, y_lab = expression(hat(delta)[j ~ "|" ~ i]))
 dev.off()
 
-## Precison matrix
+## Precision matrix
 method_vec <- c("One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Graphical", "Three-step - Saturated")
 
