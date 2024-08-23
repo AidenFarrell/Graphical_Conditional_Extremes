@@ -1,8 +1,7 @@
 ################################################################################
 #Load in required packages
 rm(list = ls())
-required_pckgs <- c("evd", "ggplot2", "ggpubr", "graphicalExtremes", "igraph", "mev")
-required_pckgs <- c("graphicalExtremes", "igraph", "mev", "parallel")
+required_pckgs <- c("ggplot2", "graphicalExtremes", "igraph", "mev", "parallel")
 # install.packages(required_pckgs, dependencies = TRUE, Ncpus = detectCores() - 1)
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
