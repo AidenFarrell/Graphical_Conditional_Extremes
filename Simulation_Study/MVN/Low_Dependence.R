@@ -144,6 +144,47 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
   return(plot_out)
 }
 
+boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
+  
+  ## Obtain some information from the data
+  if(!is.list(data)){
+    stop("data must be a list of parameter estimates to plot")
+  }
+  d_data <- length(data)
+  n_methods = length(methods)
+  p <- ncol(data[[1]][[1]])
+  n <- nrow(data[[1]][[1]])
+  
+  ## get some plotting parameters
+  x_labels <- apply(combinations(n = d_data, r = 2, v = 1:d_data, repeats.allowed = TRUE), 1, paste0, collapse = "")
+  
+  ## Construct the plotting data
+  plot_data <- data.frame(y = do.call(c, lapply(1:d_data, function(i){
+    do.call(c, lapply(1:p, function(j){
+      do.call(c, lapply(1:n_methods, function(k){
+        data[[i]][[k]][,j]}))}))})))
+  
+  plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
+  plot_data$Method <- factor(plot_data$Method, levels = methods)
+  plot_data$Conditioning_Varaible <- rep(1:d_data, each = p*n*n_methods)
+  plot_data$Conditioning_Varaible <- factor(plot_data$Conditioning_Varaible, levels = 1:d_data)
+  plot_data$Pair <- rep(rep(x_labels, each = n*n_methods), d_data)
+  plot_data$Pair <- factor(plot_data$Pair, levels = x_labels)
+  
+  ## Define custom labels for facets
+  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  
+  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, col = Method)) + 
+    geom_boxplot(outlier.shape = NA) +
+    theme(legend.position = "top") +
+    labs(x = "Pair", y = y_lab) +
+    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
+               scales = "free_y") +
+    geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 0.25)
+  
+  return(plot_out)
+}
+
 ################################################################################
 ## DO NOT RUN
 
@@ -488,7 +529,7 @@ Gamma_hat_Three_Step_Full <- lapply(1:d, function(j){
 
 ################################################################################
 ## Assess convergence of the parameters
-method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
+method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-step")
 p <- d
 
 y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
@@ -579,11 +620,11 @@ boxplot_MLEs(
   methods = method_vec, y_lab = y_lab[6])
 dev.off()
 
+# Precision matrix - Bias
 method_vec <- c("One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
-p <- length(which(lower_tri_elements))
 
-pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Gamma.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Gamma_Bias.pdf", width = 15, height = 10)
 boxplot_MLEs_Cov_Mat_Bias(
   data = lapply(1:d, function(i){
     list(Gamma_hat_One_Step_Graph[[i]],
@@ -592,6 +633,28 @@ boxplot_MLEs_Cov_Mat_Bias(
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)[~ "|" ~ i]), cov_mat_true = rho_true, precision = TRUE)
+dev.off()
+
+# Precision matrix
+Gamma_hat_data <- lapply(1:d, function(i){
+  t(sapply(1:n_sim, function(j){
+    Add_NA_Matrix(solve(cor(Y_Yi_large[[i]][[j]][,-i])), i)[lower_tri_elements]
+  }))
+})
+method_vec <- c("Data",
+                "One-step - Graphical", "Two-step - Graphical",
+                "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
+
+pdf(file = "Images/Simulation_Study/MVN/Low_Dependence/Gamma.pdf", width = 15, height = 10)
+boxplot_MLEs_Cov_Mat(
+  data = lapply(1:d, function(i){
+    list(Gamma_hat_data[[i]],
+         Gamma_hat_One_Step_Graph[[i]],
+         Gamma_hat_Two_Step_Graph[[i]],
+         Gamma_hat_Three_Step_Indep[[i]],
+         Gamma_hat_Three_Step_Graph[[i]],
+         Gamma_hat_Three_Step_Full[[i]])}),
+  methods = method_vec, y_lab = expression(hat(Gamma)[~ "|" ~ i]))
 dev.off()
 
 ################################################################################
@@ -820,10 +883,6 @@ Bias_Winner
 
 ###############################################################################
 ## Get a conditional survival curve for all the univariate probabilities
-
-## threshold above which to calculate the probabilities
-u_X <- sapply(mu_true, function(x){qnorm(dqu, mean = x, sd = 1)})
-
 cond_serv_curve_data <- function(data, u_cond, u_dep, cond_var, dep_var){
   
   ## get the couplings
@@ -858,6 +917,8 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
   return(cond_serv_out)
 }
 
+
+## Get the conditional survival curves
 u_dep <- lapply(1:d, function(i){
   seq(from = u_X[i], to = max(c(sapply(X_EH_Original_Margins, function(x){x[,i]}), sapply(X_Three_Step_Graph, function(x){x$Data_Margins[,i]}))), by = 0.01)})
 
