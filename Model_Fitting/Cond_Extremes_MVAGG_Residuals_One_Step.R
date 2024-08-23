@@ -456,7 +456,8 @@ qfun_MVAGG_graph <- function(yex, ydep, Gamma_zero, maxit, start, nOptim){
     if(inherits(Lasso_est, "try-error")){
       warning("glasso will not fit for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
       out <- list()
-      out$par <- list(loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+      out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+      out$Z <- matrix(NA, nrow = n, ncol = d)
       out$value <- NA
       out$convergence <- NA
     }
@@ -601,14 +602,24 @@ qfun_MVAGG_full <- function(yex, ydep, maxit, start, nOptim){
     
     ## Extract MLE of Gamma
     Q_F_z <- as.matrix(sapply(1:d, function(i){qnorm(pagg(q = c(Z[,i]), loc = mu_hat[i], scale_1 = sigma_1_hat[i], scale_2 = sigma_2_hat[i], shape = shape_hat[i]))}))
-    Gamma_hat <- solve(cor(Q_F_z))
-    
-    ## Organise the output
-    out <- list()
-    out$par <- list(a = a_hat, b = b_hat, loc = mu_hat, scale_1 = sigma_1_hat, scale_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
-    out$Z <- Z
-    out$value <- fit$value
-    out$convergence <- fit$convergence
+    if(any(is.infinite(Q_F_z)) | any(is.na(Q_F_z)) | any(is.nan(Q_F_z))){
+      warning("Infinite values of data on standard Gaussian margins for converged parameters in Cond_Extremes_MVAGG. \nTry new starting parameters")
+      out <- list()
+      out$par <- list(a = rep(NA, d), b = rep(NA, d), loc = rep(NA, d), scale_1 = rep(NA, d), scale_2 = rep(NA, d), shape = rep(NA, d), Gamma = matrix(NA, ncol = d, nrow = d))
+      out$Z <- matrix(NA, nrow = n, ncol = d)
+      out$value <- NA
+      out$convergence <- NA
+    }
+    else{
+      Gamma_hat <- solve(cor(Q_F_z))
+      
+      ## Organise the output
+      out <- list()
+      out$par <- list(a = a_hat, b = b_hat, loc = mu_hat, scale_1 = sigma_1_hat, scale_2 = sigma_2_hat, shape = shape_hat, Gamma = Gamma_hat)
+      out$Z <- Z
+      out$value <- fit$value
+      out$convergence <- fit$convergence
+    }
   }
   else{
     warning("Unknown error in Cond_Extremes_MVAGG")
