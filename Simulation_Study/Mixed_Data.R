@@ -193,6 +193,7 @@ n_data <- out$par_true$n_data
 
 Gamma_MVP <- out$par_true$Gamma_MVP
 Gamma_MVN <- out$par_true$Gamma_MVN
+Sigma_MVN <- solve(Gamma_MVN)
 
 ## Transforms
 X_to_Y <- out$transforms
@@ -210,7 +211,7 @@ shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$tr
 ################################################################################
 
 ## Now we want to subset the data so that each component is large in turn
-dqu <- 0.9
+dqu <- 0.8
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -266,7 +267,7 @@ fit_One_Step_Graph <- lapply(1:d, function(i){
            MoreArgs = list(graph = graph_full,
                            cond = i,
                            maxit = 1e+9,
-                           nOptim = 5),
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -319,7 +320,6 @@ fit_Three_Step_Full <- lapply(1:d, function(i){
 ################################################################################
 ## One and two step models can be somewhat sensitive to the starting values
 ## here we need to do another procedure to ensure the models converge
-
 Index_One_Step_Graph <- lapply(fit_One_Step_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
 count <- 0
 while(any(sapply(Index_One_Step_Graph, length) > 0)){
@@ -343,7 +343,7 @@ while(any(sapply(Index_One_Step_Graph, length) > 0)){
                                   graph = graph_full,
                                   start = start_par_One_Step,
                                   maxit = 1e+9,
-                                  nOptim = 5),
+                                  nOptim = 2),
               silent = TRUE)
       }
     }
@@ -687,13 +687,23 @@ boxplot_MLEs(
 dev.off()
 
 ## Precision matrix
-method_vec <- c("One-step - Graphical", "Two-step - Graphical",
+Gamma_hat_data <- lapply(1:d, function(i){
+  t(sapply(1:n_sim, function(j){
+    Add_NA_Matrix(solve(cor(Y_Yi_large[[i]][[j]][,-i])), i)[lower_tri_elements]
+  }))
+})
+
+Gamma_hat_data[[3]]
+
+method_vec <- c("Data", 
+                "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Graphical", "Three-step - Saturated")
 
 pdf(file = "Images/Simulation_Study/Mixed_Data/Gamma.pdf", width = 15, height = 10)
 boxplot_MLEs_Cov_Mat(
   data = lapply(1:d, function(i){
-    list(Gamma_hat_One_Step_Graph[[i]],
+    list(Gamma_hat_data[[i]],
+         Gamma_hat_One_Step_Graph[[i]],
          Gamma_hat_Two_Step_Graph[[i]],
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
@@ -779,7 +789,7 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.95
+q_X <- 0.9
 u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
 
 p_true_X <- t(sapply(1:d, function(i){
@@ -871,7 +881,7 @@ for(i in 1:d){
     data_to_plot$Model = rep(method_vec_1, each = n_sim)
     data_to_plot$Model <- factor(data_to_plot$Model, levels = method_vec_1)
     
-    pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
+    # pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
       lims(y = c(ymin, max(0.4, ymax))) +
@@ -887,7 +897,7 @@ for(i in 1:d){
             axis.ticks.x = element_blank()) +
       geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
     print(p_plot)
-    dev.off()
+    # dev.off()
   }
 }
 
@@ -922,6 +932,257 @@ for(i in 1:d){
 }
 Bias_Winner$Total <- rowSums(Bias_Winner)
 Bias_Winner
+
+################################################################################
+## Get a conditional survival curve for all the univariate probabilities
+
+cond_serv_curve_data <- function(data, u_cond, u_dep, cond_var, dep_var){
+  
+  ## get the couplings
+  u_cond_dep <- lapply(apply(cbind(rep(u_cond, length(u_dep)), u_dep), 1, list), function(x){x[[1]]})
+  data_cond_dep <- data[,c(cond_var, dep_var)]
+  
+  cond_serv_out <- mcmapply(FUN = p_data_surv_multi,
+                            u = u_cond_dep,
+                            MoreArgs = list(data = data_cond_dep, cond = 1, uncon = 2),
+                            SIMPLIFY = TRUE,
+                            mc.cores = detectCores() - 1)
+  return(cond_serv_out)
+}
+
+cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
+  
+  if(!is.list(data)){
+    stop("data must be a list")
+  }
+  
+  ## get the couplings
+  u_cond_dep <- lapply(apply(cbind(rep(u_cond, length(u_dep)), u_dep), 1, list), function(x){x[[1]]})
+  data_cond_dep <- lapply(data, function(x){x[,c(cond_var, dep_var)]})
+  
+  ## get the conditional survival function
+  cond_serv_out <- t(sapply(u_cond_dep, function(u){
+    mcmapply(FUN = p_data_surv_multi,
+             data = data_cond_dep,
+             MoreArgs = list(cond = 1, u = u, uncon = 2),
+             SIMPLIFY = TRUE,
+             mc.cores = detectCores() - 1)}))
+  return(cond_serv_out)
+}
+
+## Get the survival functions
+u_min <- apply(sapply(X, function(x){apply(x, 2, min)}), 1, min)
+u_max <- rbind(apply(sapply(X_EH_Original_Margins, function(x){apply(x, 2, max)}), 1, max),
+               apply(sapply(X_Three_Step_Graph, function(x){apply(x$Data_Margins, 2, max)}), 1, max),
+               apply(sapply(X_HT, function(x){apply(x$Data_Margins, 2, max)}), 1, max),
+               apply(X_prob_calc, 2, max))
+u_max <- unname(apply(u_max, 2, max))
+
+u_dep <- lapply(1:d, function(i){
+  seq(from = u_min[i], to = u_max[i], by = 0.01)})
+
+surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
+  cond_serv_curve_model(data = X_EH_Original_Margins, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
+surv_Three_Step <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
+  cond_serv_curve_model(data = lapply(X_Three_Step_Graph, function(x){x$Data_Margins}), 
+                        u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
+surv_HT <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
+  cond_serv_curve_model(data = lapply(X_HT, function(x){x$Data_Margins}), 
+                        u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
+surv_data <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
+  cond_serv_curve_data(data = X_prob_calc, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
+
+## get a ggplot of the bias
+## Let us only focus on Y1 being large first
+bias_EH <- bias_Three_Step <- bias_HT <- rep(list(vector("list", d)), d)
+for(i in 1:d){
+  for(j in 1:d){
+    if(i == j){
+      bias_EH[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
+      bias_Three_Step[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
+      bias_HT[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
+    }
+    else if(i < j){
+      bias_EH[[i]][[j]] <- surv_EH[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
+                                                        nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                        byrow = FALSE)
+      bias_Three_Step[[i]][[j]] <- surv_Three_Step[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
+                                                                        nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                                        byrow = FALSE)
+      
+      bias_HT[[i]][[j]] <- surv_HT[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
+                                                        nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                        byrow = FALSE)
+    }
+    else{
+      bias_EH[[i]][[j]] <- surv_EH[[i]][[j]] - matrix(surv_data[[i]][[j]], 
+                                                      nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                      byrow = FALSE)
+      
+      bias_Three_Step[[i]][[j]] <- surv_Three_Step[[i]][[j]] - matrix(surv_data[[i]][[j]], 
+                                                                      nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                                      byrow = FALSE)
+      
+      bias_HT[[i]][[j]] <- surv_HT[[i]][[j]] - matrix(surv_data[[i]][[j]], 
+                                                      nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                      byrow = FALSE)
+    }
+  }
+}
+
+## CI data
+ci <- c(0.025, 0.975)
+bias_EH_CI <- lapply(bias_EH, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
+bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
+bias_HT_CI <- lapply(bias_HT, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
+
+## set-up the data frame
+methods <- c("Engelke & Hitz", "Three-Step - Graphical", "Heffernan and Tawn")
+n_methods <- length(methods)
+bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c(x, rev(x))})), n_methods), d),
+                         y_vals =  c(do.call(c, lapply(bias_EH_CI, function(x){
+                           do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))})),
+                           do.call(c, lapply(bias_Three_Step_CI, function(x){
+                             do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))})),
+                           do.call(c, lapply(bias_HT_CI, function(x){
+                             do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))}))),
+                         Method = rep(methods, each = sum(sapply(u_dep, length))*2*d),
+                         Conditioning_Variable = rep(rep(1:d, each = sum(sapply(u_dep, length))*2), n_methods),
+                         Dependent_Variable = rep(rep(do.call(c, sapply(1:d, function(i){rep(i, times = length(u_dep[[i]])*2)})), d), n_methods))
+
+bias_ci_df$Method <- factor(bias_ci_df$Method, levels = methods)
+bias_ci_df$Conditioning_Variable <- factor(bias_ci_df$Conditioning_Variable, levels = unique(bias_ci_df$Conditioning_Variable))
+bias_ci_df$Dependent_Variable <- factor(bias_ci_df$Dependent_Variable, levels = unique(bias_ci_df$Dependent_Variable))
+
+
+# Updated custom labeller function for rows
+label_y <- function(labels) {
+  sapply(labels, function(label) {
+    substitute("i = " ~ label, list(label = label))
+  })
+}
+
+# Updated custom labeller function for columns
+label_x <- function(labels) {
+  sapply(labels, function(label) {
+    substitute("P(" ~ X[label] > u[label] ~ "|" ~ X[i] > u[i] ~ ")", list(label = label))
+  })
+}
+
+# Create the ggplot
+# pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
+ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
+  geom_polygon(aes(fill = Method), alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+  theme(legend.position = "top") +
+  labs(x = "u (Dependent Variable)", y = "Bias") +
+  facet_grid(
+    rows = vars(Conditioning_Variable), 
+    cols = vars(Dependent_Variable),
+    scales = "free_x",
+    labeller = labeller(
+      Conditioning_Variable = as_labeller(label_y, default = label_parsed),
+      Dependent_Variable = as_labeller(label_x, default = label_parsed)
+    )
+  )
+# dev.off()
+
+## 2 x 2 plot of the above for one conditioning variable
+for(i in 1:d){
+  label_x <- function(labels) {
+    sapply(labels, function(label) {
+      substitute("P(" ~ X[label] > u[label] ~ "|" ~ X[i] > u[i] ~ ")", list(label = label, i = i))
+    })
+  }
+  bias_ci_df_cond <- bias_ci_df[which(bias_ci_df$Conditioning_Variable == i),]
+  bias_ci_df_cond <- bias_ci_df_cond[-which(bias_ci_df_cond$Dependent_Variable == i),]
+  # pdf(file = paste0("Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
+  p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
+    geom_polygon(aes(fill = Method), alpha = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+    theme(legend.position = "top") +
+    labs(x = "u (Dependent Variable)", y = "Bias") +
+    facet_wrap(~ Dependent_Variable,
+               nrow = 2, ncol = 2,
+               scales = "free_x",
+               labeller = labeller(
+                 Conditioning_Variable = as_labeller(label_y, default = label_parsed),
+                 Dependent_Variable = as_labeller(label_x, default = label_parsed)
+               )
+    )
+  print(p)
+  # dev.off() 
+}
+
+################################################################################
+par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
+k <- sample(1:n_sim, 1)
+for(i in 1:d){
+  for(j in 1:d){
+    y_low <- min(X[[k]][,c(i,j)],
+                 X_EH_Original_Margins[[k]][,c(i,j)],
+                 X_HT[[k]]$Data_Margins[,c(i,j)],
+                 X_Three_Step_Graph[[k]]$Data_Margins[,c(i,j)])
+    
+    y_high <- max(X[[k]][,c(i,j)],
+                  X_EH_Original_Margins[[k]][,c(i,j)],
+                  X_HT[[k]]$Data_Margins[,c(i,j)],
+                  X_Three_Step_Graph[[k]]$Data_Margins[,c(i,j)])
+    
+    plot(X[[k]][,i], X[[k]][,j], pch = 19,
+         xlab = substitute(X[i], list(i = i)),
+         ylab = substitute(X[j], list(j = j)),
+         xlim = c(y_low, y_high), ylim = c(y_low, y_high))
+    
+    # points(X_EH_Original_Margins[[k]][,i], X_EH_Original_Margins[[k]][,j],
+    #        col = alpha(col = "blue", alpha = 0.4))
+    
+    points(X_HT[[k]]$Data_Margins[,i], X_HT[[k]]$Data_Margins[,j],
+           col = alpha(col = "yellow", alpha = 0.5))
+    
+    points(X_Three_Step_Graph[[k]]$Data_Margins[,i], X_Three_Step_Graph[[k]]$Data_Margins[,j],
+           col = alpha(col = "red", alpha = 0.3))
+    
+  }
+}
+
+k <- sample(1:n_sim, 1)
+par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
+for(i in 1:d){
+  for(j in 1:d){
+    if(i == j){
+      plot(1, type="n", xlab="", ylab="", xaxt = 'n', yaxt = 'n')
+    }
+    else if(j < i){
+      res <- fit_Three_Step_Graph[[i]][[k]]$Z[,j]
+      dens_res <- density(res)
+      dens_res_theo <- dagg(x = dens_res$x,
+                            loc = fit_Three_Step_Graph[[i]][[k]]$par$main[3,j],
+                            scale_1 = fit_Three_Step_Graph[[i]][[k]]$par$main[4,j],
+                            scale_2 = fit_Three_Step_Graph[[i]][[k]]$par$main[5,j],
+                            shape = fit_Three_Step_Graph[[i]][[k]]$par$main[6,j])
+      
+      plot(x = dens_res$x, y = dens_res$y, type = "l", lwd = 4,
+           ylim = c(0, max(dens_res$y, dens_res_theo)),
+           xlab = "z", ylab = "Density", main = substitute(Z[j ~ "|" ~ i], list(i = i, j = j)))
+      lines(x = dens_res$x, y = dens_res_theo, col = "red", lwd = 2)
+    }
+    else{
+      res <- fit_Three_Step_Graph[[i]][[k]]$Z[,j-1]
+      dens_res <- density(res)
+      dens_res_theo <- dagg(x = dens_res$x,
+                            loc = fit_Three_Step_Graph[[i]][[k]]$par$main[3,j-1],
+                            scale_1 = fit_Three_Step_Graph[[i]][[k]]$par$main[4,j-1],
+                            scale_2 = fit_Three_Step_Graph[[i]][[k]]$par$main[5,j-1],
+                            shape = fit_Three_Step_Graph[[i]][[k]]$par$main[6,j-1])
+      
+      plot(x = dens_res$x, y = dens_res$y, type = "l", lwd = 4,
+           ylim = c(0, max(dens_res$y, dens_res_theo)),
+           xlab = "z", ylab = "Density", main = substitute(Z[j ~ "|" ~ i], list(i = i, j = j)))
+      lines(x = dens_res$x, y = dens_res_theo, col = "red", lwd = 2)
+    }
+  }
+}
 
 ################################################################################
 # out <- list(transforms = X_to_Y,
