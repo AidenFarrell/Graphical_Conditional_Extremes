@@ -12,7 +12,7 @@ t(t(sapply(required_pckgs, require, character.only = TRUE)))
 source("Miscellaneous_Functions/MVAGG_Functions.R")
 source("Miscellaneous_Functions/General_Functions.R")
 source("Miscellaneous_Functions/Transformations.R")
-source("Miscellaneous_Functions/Plotting_Functions")
+source("Miscellaneous_Functions/Plotting_Functions.R")
 
 ## read in threshold selection functions
 source("threshold_selection_paper/helper_functions.R")
