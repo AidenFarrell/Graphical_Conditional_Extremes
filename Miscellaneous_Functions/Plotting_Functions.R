@@ -26,8 +26,15 @@ boxplot_MLEs <- function(data, methods, y_lab){
   ## plot the data
   plot_out <- ggplot(data = plot_data, aes(x = Dependent_Variable, y = y, fill = Method)) + 
     geom_boxplot() +
-    theme(legend.position = "top") +
-    labs(x = "Depednent Varaible (j)", y = y_lab) +
+    theme(legend.position = "top",
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          strip.text = element_text(size = 12),
+          panel.grid.minor.y = element_blank()) +
+    labs(x = "Dependent variable (j)", y = y_lab) +
     facet_grid(cols = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels))
   print(plot_out)
 }
@@ -79,7 +86,14 @@ boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precis
   
   plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method)) + 
     geom_boxplot() +
-    theme(legend.position = "top") +
+    theme(legend.position = "top",
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          strip.text = element_text(size = 12),
+          panel.grid.minor.y = element_blank()) +
     guides(colour = guide_legend(nrow = 1)) +
     labs(x = "Pair", y = y_lab) +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
@@ -119,13 +133,19 @@ boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
   ## Define custom labels for facets
   facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
   
-  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, col = Method)) + 
+  plot_out <- ggplot(data = plot_data, aes(y = y, col = Method)) + 
     geom_boxplot(outlier.shape = NA) +
-    theme(legend.position = "top") +
+    theme(legend.position = "top", 
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.y = element_text(size = 16),
+          axis.text.y = element_text(size = 12),
+          strip.text = element_text(size = 12)) +
+    scale_x_continuous(breaks = NULL) +
     guides(colour = guide_legend(nrow = 1)) +
-    labs(x = "Pair", y = y_lab) +
+    labs(y = y_lab) +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
-               scales = "free_y") +
+               cols = vars(Pair)) +
     geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 0.25)
   
   return(plot_out)
