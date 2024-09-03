@@ -27,13 +27,13 @@ Cond_Extremes_MVN <- function(data, cond, graph = NA,
   if(missing(start)){
     start <- c(0.1, 0.1)
   }
-  else if(!is.numeric(start)){
+  if(!is.numeric(start)){
     stop("start must be a vector")
   }
-  else if(length(start) != 2){
+  if(length(start) != 2){
     stop("start must be a vector of length 2")
   }
-  else if(any(abs(start) > 1)){
+  if(any(abs(start) > 1)){
     stop("Initial starting values are outside the parameter sapce")
   }
   if(length(start) == 2){

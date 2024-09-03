@@ -35,19 +35,19 @@ Cond_Extremes_MVAGG <- function(data, cond, graph = NA, start,
   
   ## Obtain the starting parameters
   if(missing(start)){
-    start <- c(0.1, 0.1, 0, 1.5, 2, 1.5)
+    start <- matrix(data = rep(c(0.1, 0.1, 0, 1.5, 2, 1.5), d-1), nrow = d-1, ncol = 6, byrow = TRUE)
   }
-  else if(!is.numeric(start)){
-    stop("start must be a vector")
-  }
-  else if(length(start) != 6*(d-1)){
-    stop("start must be a vector of length 6(d-1)")
-  }
-  else if(any(abs(start[,1:2]) > 1)){
-    stop("Initial starting values are outside the parameter space")
+  if(!is.numeric(start)){
+    stop("start must be a vector or matrix")
   }
   if(length(start) == 6){
     start <- matrix(rep(start, d-1), ncol = 6, byrow = TRUE)
+  }
+  if(length(start) != 6*(d-1)){
+    stop("start must be a vector of length 6 or a matrix of dimension (d - 1) x 6")
+  }
+  if(any(abs(start[,1:2]) > 1)){
+    stop("Initial starting values are outside the parameter space")
   }
   
   ## Separate data into the conditioning and unconditioned random variables
