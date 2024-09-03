@@ -219,7 +219,7 @@ fit_MVAGG_Three_Step_Full <- lapply(1:n_boot, function(i){
 })
 
 ################################################################################
-## The AGG parametrs may need alternative starting values
+## The AGG parameters may need alternative starting values
 ## Below will fix this
 
 Index_Three_Step_Graph <- lapply(fit_MVAGG_Three_Step_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
@@ -665,6 +665,4 @@ ggplot(data = chi_multi_comp) + geom_point(aes(x = x, y = y, col = se)) +
              labeller = labeller(u = as_labeller(label_y, default = label_parsed)))
 dev.off()
 
-
-
-
+################################################################################
