@@ -12,6 +12,7 @@ t(t(sapply(required_pckgs, require, character.only = TRUE)))
 source("Miscellaneous_Functions/MVAGG_Functions.R")
 source("Miscellaneous_Functions/General_Functions.R")
 source("Miscellaneous_Functions/Transformations.R")
+source("Miscellaneous_Functions/Plotting_Functions.R")
 
 ## read in threshold selection functions
 source("threshold_selection_paper/helper_functions.R")
@@ -53,95 +54,6 @@ u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transf
 qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
 scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
-
-################################################################################
-## plotting functions for later
-boxplot_MLEs <- function(data, methods, y_lab){
-  
-  ## Extract some information from the data
-  d_data <- length(data)
-  n_methods <- length(methods)
-  p <- ncol(data[[1]])/n_methods
-  n <- nrow(data[[1]])
-  
-  ## get some plotting parameters
-  y_min <- floor(min(sapply(data, min, na.rm = TRUE))/0.1)*0.1
-  y_max <- ceiling(max(sapply(data, max, na.rm = TRUE))/0.1)*0.1
-  
-  ## main data to plot
-  plot_data <- data.frame(y = do.call(c, data))
-  plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
-  plot_data$Method <- factor(plot_data$Method, levels = methods)
-  plot_data$Conditioning_Varaible <- rep(1:d_data, each = p*n_sim*n_methods)
-  plot_data$Conditioning_Varaible <- factor(plot_data$Conditioning_Varaible, levels = 1:d_data)
-  plot_data$Dependent_Variable <- rep(rep(1:p, each = n_sim*n_methods), d_data)
-  plot_data$Dependent_Variable <- factor(plot_data$Dependent_Variable, levels = 1:p)
-  
-  ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
-  
-  ## plot the data
-  plot_out <- ggplot(data = plot_data, aes(x = Dependent_Variable, y = y, fill = Method)) + 
-    geom_boxplot() +
-    theme(legend.position = "top") +
-    labs(x = "Depednent Varaible (j)", y = y_lab) +
-    facet_grid(cols = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels))
-  print(plot_out)
-}
-
-boxplot_MLEs_Cov_Mat_Bias <- function(data, methods, y_lab, cov_mat_true, precision = FALSE){
-  
-  ## Obtain some information from the data
-  if(!is.list(data)){
-    stop("data must be a list of parameter estimates to plot")
-  }
-  d_data <- length(data)
-  n_methods = length(methods)
-  p <- ncol(data[[1]][[1]])
-  n <- nrow(data[[1]][[1]])
-  
-  ## get some plotting parameters
-  x_labels <- apply(combinations(n = d_data, r = 2, v = 1:d_data, repeats.allowed = TRUE), 1, paste0, collapse = "")
-  
-  ## Get the true parameters in the correct form
-  lower_tri_elements <- lower.tri(cov_mat_true, diag = TRUE)
-  cov_mat_true_i <- lapply(1:d_data, function(i){Cond_Sigma(cov_mat_true, i)})
-  cor_mat_true_i <- lapply(cov_mat_true_i, cov2cor)
-  if(precision){
-    cor_mat_true_i <- lapply(cor_mat_true_i, solve)
-  }
-  cor_mat_true_i_NA <- lapply(1:d_data, function(i){Add_NA_Matrix(cor_mat_true_i[[i]], i)[lower_tri_elements]})
-  
-  ## get the bias
-  data_bias <- lapply(1:d_data, function(i){lapply(1:n_methods, function(j){
-    data[[i]][[j]] - matrix(rep(cor_mat_true_i_NA[[i]], n), nrow = n, byrow = TRUE)
-  })})
-  
-  ## Construct the plotting data
-  plot_data <- data.frame(y = do.call(c, lapply(1:d_data, function(i){
-    do.call(c, lapply(1:p, function(j){
-      do.call(c, lapply(1:n_methods, function(k){
-        data_bias[[i]][[k]][,j]}))}))})))
-  
-  plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
-  plot_data$Method <- factor(plot_data$Method, levels = methods)
-  plot_data$Conditioning_Varaible <- rep(1:d_data, each = p*n*n_methods)
-  plot_data$Conditioning_Varaible <- factor(plot_data$Conditioning_Varaible, levels = 1:d_data)
-  plot_data$Pair <- rep(rep(x_labels, each = n*n_methods), d_data)
-  plot_data$Pair <- factor(plot_data$Pair, levels = x_labels)
-  
-  ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
-  
-  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method)) + 
-    geom_boxplot() +
-    theme(legend.position = "top") +
-    labs(x = "Pair", y = y_lab) +
-    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
-    geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
-  
-  return(plot_out)
-}
 
 ################################################################################
 ## DO NOT RUN
@@ -563,7 +475,11 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1),
        y = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1)) +
-  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
+  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed) +
+  theme(axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12))
 dev.off()
 
 # Shape
@@ -576,11 +492,11 @@ boxplot_MLEs(
   methods = method_vec, y_lab = y_lab[6])
 dev.off()
 
+# Precision matrix - Bias
 method_vec <- c("One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
-p <- length(which(lower_tri_elements))
 
-pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Gamma.pdf", width = 15, height = 10)
+pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Gamma_Bias.pdf", width = 15, height = 10)
 boxplot_MLEs_Cov_Mat_Bias(
   data = lapply(1:d, function(i){
     list(Gamma_hat_One_Step_Graph[[i]],
@@ -589,6 +505,29 @@ boxplot_MLEs_Cov_Mat_Bias(
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(Gamma)[~ "|" ~ i]), cov_mat_true = rho_true, precision = TRUE)
+dev.off()
+
+# Precision matrix
+Gamma_hat_data <- lapply(1:d, function(i){
+  t(sapply(1:n_sim, function(j){
+    Add_NA_Matrix(solve(cor(Y_Yi_large[[i]][[j]]))[-i,-i], i)[lower_tri_elements]
+  }))
+})
+
+method_vec <- c("Data",
+                "One-step - Graphical", "Two-step - Graphical",
+                "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
+
+pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Gamma.pdf", width = 15, height = 10)
+boxplot_MLEs_Cov_Mat(
+  data = lapply(1:d, function(i){
+    list(Gamma_hat_data[[i]],
+         Gamma_hat_One_Step_Graph[[i]],
+         Gamma_hat_Two_Step_Graph[[i]],
+         Gamma_hat_Three_Step_Indep[[i]],
+         Gamma_hat_Three_Step_Graph[[i]],
+         Gamma_hat_Three_Step_Full[[i]])}),
+  methods = method_vec, y_lab = expression(hat(Gamma)[~ "|" ~ i]))
 dev.off()
 
 ################################################################################
@@ -773,11 +712,13 @@ for(i in 1:d){
             legend.box.just = "right",
             legend.margin = margin(6, 6, 6, 6),
             legend.key.size = unit(0.75, 'cm'),
-            legend.title = element_text(size = 15),
-            legend.text = element_text(size = 10),
+            legend.title = element_text(size = 20),
+            legend.text = element_text(size = 12),
+            axis.title.y = element_text(size = 16),
+            axis.text = element_text(size = 12),
             axis.text.x = element_blank(), 
             axis.ticks.x = element_blank()) +
-      geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
+      geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
     print(p_plot)
     dev.off()
   }
@@ -817,10 +758,6 @@ Bias_Winner
 
 ################################################################################
 ## Get a conditional survival curve for all the univariate probabilities
-
-## threshold above which to calculate the probabilities
-u_X <- sapply(mu_true, function(x){qnorm(dqu, mean = x, sd = 1)})
-
 cond_serv_curve_data <- function(data, u_cond, u_dep, cond_var, dep_var){
   
   ## get the couplings
@@ -935,9 +872,18 @@ par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
 pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-  theme(legend.position = "top") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank()) +
   labs(x = "u (Dependent Variable)", y = "Bias") +
+  scale_x_continuous(breaks = seq(from = floor(min(bias_ci_df$x_vals)), to = ceiling(max(bias_ci_df$x_vals)), by = 1)) +
   facet_grid(
     rows = vars(Conditioning_Variable), 
     cols = vars(Dependent_Variable),
@@ -961,9 +907,18 @@ for(i in 1:d){
   pdf(file = paste0("Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
   p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
     geom_polygon(aes(fill = Method), alpha = 0.5) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-    theme(legend.position = "top") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+    theme(legend.position = "top",
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          strip.text = element_text(size = 12),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()) +
     labs(x = "u (Dependent Variable)", y = "Bias") +
+    scale_x_continuous(breaks = seq(from = floor(min(bias_ci_df$x_vals)), to = ceiling(max(bias_ci_df$x_vals)), by = 1)) +
     facet_wrap(~ Dependent_Variable,
                nrow = 2, ncol = 2,
                scales = "free_x",
