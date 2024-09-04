@@ -4,7 +4,6 @@ required_pckgs <- c("ggpattern", "ggplot2", "gtools")
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
-
 ## Comparison plots parameters
 comp_plots <- function(data, methods, y_lab, ylims, par_true){
   
@@ -42,28 +41,31 @@ comp_plots <- function(data, methods, y_lab, ylims, par_true){
   plot_data$Type <- factor(plot_data$Type, levels = c("250", "500"))
   
   ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  facet_labels_rows <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  facet_labels_cols <- setNames(c("n = 250", "n = 500"), levels(plot_data$Type))
   
   ## Make the plot
-  plot_out <- ggplot(data = plot_data, aes(x = Dependent_Varaible, y = y, fill = Method, pattern = Type)) + 
-    geom_boxplot_pattern(position = position_dodge(preserve = "single"),
-                         color = "black", pattern_fill = "black",
-                         pattern_angle = 45, pattern_density = 0.1,
-                         pattern_spacing = 0.025, pattern_key_scale_factor = 0.6,
-                         outlier.shape = NA) +
-    scale_pattern_manual(values = c("250" = "none", "500" = "stripe")) +
-    guides(pattern = guide_legend(override.aes = list(fill = "white")),
-           fill = guide_legend(override.aes = list(pattern = "none"))) +
+  plot_out <- ggplot(data = plot_data, aes(x = Dependent_Varaible, y = y, fill = Method)) + 
+    geom_boxplot(outlier.shape = NA) + 
+    guides(fill = guide_legend(nrow = 1)) +
     theme(legend.position = "top",
           legend.box = "horizontal",
           legend.box.just = "center",
           legend.spacing.x = unit(0.5, 'cm'),
           legend.spacing.y = unit(0.5, 'cm'),
           legend.margin = margin(0, 0, 0, 0),
-          legend.box.margin = margin(0, 0, 0, 0)) +
+          legend.box.margin = margin(0, 0, 0, 0),
+          legend.title = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          axis.title.x = element_text(size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 16),
+          strip.text = element_text(size = 16),
+          panel.grid.minor.y = element_blank()) +
     lims(y = ylims) +
-    labs(x = "Dependent Variable (j)", y = y_lab, pattern = "Number of Excesses") +
-    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
+    labs(x = "Dependent Variable (j)", y = y_lab) +
+    facet_grid(rows = vars(Conditioning_Varaible), cols = vars(Type), 
+               labeller = labeller(Conditioning_Varaible = facet_labels_rows, Type = facet_labels_cols)) +
     geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
   
   return(plot_out)
@@ -115,28 +117,31 @@ comp_plots_matrix <- function(data, methods, y_lab, ylims, cov_mat_true, precisi
   plot_data$Type <- factor(plot_data$Type, levels = c("250", "500"))
   
   ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  facet_labels_rows <- setNames(paste0("i = ", 1:d_data), 1:d_data)
+  facet_labels_cols <- setNames(c("n = 250", "n = 500"), levels(plot_data$Type))
   
   ## Make the plot
-  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method, pattern = Type)) + 
-    geom_boxplot_pattern(position = position_dodge(preserve = "single"),
-                         color = "black", pattern_fill = "black",
-                         pattern_angle = 45, pattern_density = 0.1,
-                         pattern_spacing = 0.01, pattern_key_scale_factor = 0.6,
-                         outlier.shape = NA) +
-    scale_pattern_manual(values = c("250" = "none", "500" = "stripe")) +
-    guides(pattern = guide_legend(override.aes = list(fill = "white")),
-           fill = guide_legend(override.aes = list(pattern = "none"))) +
+  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, fill = Method)) + 
+    geom_boxplot(outlier.shape = NA) + 
+    guides(fill = guide_legend(nrow = 1)) +
     theme(legend.position = "top",
           legend.box = "horizontal",
           legend.box.just = "center",
           legend.spacing.x = unit(0.5, 'cm'),
           legend.spacing.y = unit(0.5, 'cm'),
           legend.margin = margin(0, 0, 0, 0),
-          legend.box.margin = margin(0, 0, 0, 0)) +
+          legend.box.margin = margin(0, 0, 0, 0),
+          legend.title = element_text(size = 20),
+          legend.text = element_text(size = 16),
+          axis.title.x = element_text(size = 20),
+          axis.title.y = element_text(size = 20),
+          axis.text = element_text(size = 16),
+          strip.text = element_text(size = 16),
+          panel.grid.minor.y = element_blank()) +
     lims(y = ylims) +
-    labs(x = "Pair", y = y_lab, pattern = "Number of Excesses") +
-    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels)) +
+    labs(x = "Pair", y = y_lab) +
+    facet_grid(rows = vars(Conditioning_Varaible), cols = vars(Type), 
+               labeller = labeller(Conditioning_Varaible = facet_labels_rows, Type = facet_labels_cols)) +
     geom_hline(yintercept = 0, col = "red", linetype = "dashed", linewidth = 0.5)
   
   return(plot_out)
