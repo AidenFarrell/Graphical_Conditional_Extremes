@@ -397,7 +397,7 @@ Gamma_hat_Three_Step_Full <- lapply(1:d, function(j){
 
 ################################################################################
 ## Assess convergence of the parameters
-method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
+method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-step")
 p <- d
 
 y_lab <- c(expression(hat(alpha)[j ~ "|" ~ i]),
@@ -705,7 +705,7 @@ for(i in 1:d){
     pdf(paste0("Images/Simulation_Study/MVN/High_Dependence/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
-      lims(y = c(ymin, ymax)) +
+      lims(y = c(ymin, max(0.3, ymax))) +
       labs(y = "Bias", title = plot_titles[[i]][[j]]) +
       theme(legend.position = c(.95, .95),
             legend.justification = c("right", "top"),
@@ -837,7 +837,7 @@ bias_EH_CI <- lapply(bias_EH, function(x){lapply(x, function(y){t(apply(y, 1, qu
 bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 
 ## set-up the data frame
-methods <- c("Engelke & Hitz", "Three-Step - Graphical")
+methods <- c("Engelke & Hitz", "Three-step - Graphical")
 n_methods <- length(methods)
 bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c(x, rev(x))})), n_methods), d),
                          y_vals =  c(do.call(c, lapply(bias_EH_CI, function(x){
