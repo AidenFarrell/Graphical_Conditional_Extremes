@@ -226,12 +226,13 @@ fit_Two_Step_Indep <- lapply(1:length(n_excesses), function(i){
 
 ## Give some informed starting place to the graphical and saturated models
 start_par_Two_Step <- lapply(1:length(n_excesses), function(i){
-  lapply(1:d, function(j){lapply(1:n_sim, function(k){
-    cbind(unname(fit_Two_Step_Indep[[i]][[j]][[k]]$par$main[3,]),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[4,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[5,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[6,]), 0.5), 2))})})})
-
+  lapply(1:d, function(j){
+    lapply(1:n_sim, function(k){
+      cbind(fit_Two_Step_Indep[[i]][[j]][[k]]$par$main[3,],
+            rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))
+    })
+  })
+})
 
 ## Graphical
 fit_Two_Step_Graph <- lapply(1:length(n_excesses), function(i){
@@ -326,7 +327,8 @@ while(any(sapply(Index_One_Step_Indep, function(x){sapply(x, length)}) > 0)){
                                     cond = j,
                                     graph = NA,
                                     start = start_par_One_Step,
-                                    maxit = 1e+9),
+                                    maxit = 1e+9,
+                                    nOptim = 5),
                 silent = TRUE)
         }
       }
@@ -371,8 +373,8 @@ while(any(sapply(Index_One_Step_Graph, function(x){sapply(x, length)}) > 0)){
                                     cond = j,
                                     graph = g_true,
                                     start = start_par_One_Step,
-                                    nOptim = 5,
-                                    maxit = 1e+9),
+                                    maxit = 1e+9,
+                                    nOptim = 5),
                 silent = TRUE)
         }
       }
@@ -760,7 +762,7 @@ Loc_plot <- comp_plots(data = lapply(1:d, function(j){
          loc_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(nu)[j ~ "|" ~ i]), 
   ylims = c(-1, 1), par_true = loc_true)
-pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Location.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Location.pdf", width = 20, height = 15)
 print(Loc_plot)
 dev.off()
 
@@ -776,7 +778,7 @@ Scale_1_plot <- comp_plots(data = lapply(1:d, function(j){
          scale_1_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(kappa[1])[j ~ "|" ~ i]), 
   ylims = c(-0.5, 1), par_true = scale_1_true)
-pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Scale_Left.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Scale_Left.pdf", width = 20, height = 15)
 print(Scale_1_plot)
 dev.off()
 
@@ -792,7 +794,7 @@ Scale_2_plot <- comp_plots(data = lapply(1:d, function(j){
          scale_2_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(kappa[2])[j ~ "|" ~ i]), 
   ylims = c(-1, 1.5), par_true = scale_2_true)
-pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Scale_Right.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Scale_Right.pdf", width = 20, height = 15)
 print(Scale_2_plot)
 dev.off()
 
@@ -808,7 +810,7 @@ Shape_plot <- comp_plots(data = lapply(1:d, function(j){
          shape_hat_Three_Step_Indep[[i]][[j]])})}),
   methods = method_vec, y_lab = expression("Bias in" ~ hat(delta)[j ~ "|" ~ i]), 
   ylims = c(-1, 1.5), par_true = shape_true)
-pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Shape.pdf", width = 15, height = 10)
+pdf("Images/Simulation_Study/True_Distribution/Negative_Dependence/Shape.pdf", width = 20, height = 15)
 print(Shape_plot)
 dev.off()
 
