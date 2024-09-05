@@ -761,8 +761,8 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
   return(cond_serv_out)
 }
 
-u_max <- ceiling(max(apply(sapply(X, function(x){apply(x, 2, quantile, 0.995)}), 1, max)))
-u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max, by = 0.01)})
+u_max <- ceiling(max(apply(sapply(X, function(x){apply(x, 2, quantile, 0.999)}), 1, max)))
+u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max, by = 1)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = X_EH, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
@@ -837,11 +837,10 @@ label_x <- function(labels) {
 }
 
 # Create the ggplot
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
 pdf(file = "Images/Simulation_Study/MVP/Probabilities/MVP_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
   theme(legend.position = "top",
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 12),
@@ -852,6 +851,7 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
         panel.grid.minor.x = element_blank(),
         panel.grid.minor.y = element_blank()) +
   labs(x = "u (Dependent Variable)", y = "Bias") +
+  scale_x_continuous(breaks = seq(from = 0, to = ceiling(max(bias_ci_df$x_vals)), by = 750)) +
   facet_grid(
     rows = vars(Conditioning_Variable), 
     cols = vars(Dependent_Variable),
@@ -875,7 +875,7 @@ for(i in 1:d){
   pdf(file = paste0("Images/Simulation_Study/MVP/Probabilities/MVP_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
   p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
     geom_polygon(aes(fill = Method), alpha = 0.5) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
     theme(legend.position = "top",
           legend.title = element_text(size = 16),
           legend.text = element_text(size = 12),
@@ -886,6 +886,7 @@ for(i in 1:d){
           panel.grid.minor.x = element_blank(),
           panel.grid.minor.y = element_blank()) +
     labs(x = "u (Dependent Variable)", y = "Bias") +
+    scale_x_continuous(breaks = seq(from = 0, to = ceiling(max(bias_ci_df$x_vals)), by = 250)) +
     facet_wrap(~ Dependent_Variable,
                nrow = 2, ncol = 2,
                scales = "free_x",
@@ -897,3 +898,4 @@ for(i in 1:d){
   print(p)
   dev.off() 
 }
+
