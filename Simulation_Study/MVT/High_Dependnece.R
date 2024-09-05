@@ -43,6 +43,9 @@ Gamma_true <- out$par_true$Gamma
 Sigma_true <- solve(Gamma_true)
 rho_true <- cov2cor(Sigma_true)
 
+df <- 5
+dispersion_matrix <- Sigma_true*(df-2)/df
+
 ## Transforms
 X_to_Y <- out$transforms
 
@@ -479,7 +482,11 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1),
        y = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1)) +
-  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
+  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed) +
+  theme(axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12))
 dev.off()
 
 # Shape
@@ -610,7 +617,8 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 
 ## threshold above which to calculate the probabilities
 q_X <- 0.9
-u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
+u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, mean)
+u_X <- rep(1.25, d)
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
@@ -692,7 +700,7 @@ method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
                 "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 method_vec_1 <- method_vec[-1]
-for(i in 1:d){
+for(i in 1:1){
   for(j in 1:length(uncon[[1]])){
     ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
     ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
@@ -711,11 +719,13 @@ for(i in 1:d){
             legend.box.just = "right",
             legend.margin = margin(6, 6, 6, 6),
             legend.key.size = unit(0.75, 'cm'),
-            legend.title = element_text(size = 15),
-            legend.text = element_text(size = 10),
+            legend.title = element_text(size = 20),
+            legend.text = element_text(size = 12),
+            axis.title.y = element_text(size = 16),
+            axis.text = element_text(size = 12),
             axis.text.x = element_blank(), 
             axis.ticks.x = element_blank()) +
-      geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
+      geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
     print(p_plot)
     dev.off()
   }
@@ -865,13 +875,21 @@ label_x <- function(labels) {
 }
 
 # Create the ggplot
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
 pdf(file = "Images/Simulation_Study/MVT/High_Dependence/Probabilities/MVT_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-  theme(legend.position = "top") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank()) +
   labs(x = "u (Dependent Variable)", y = "Bias") +
+  scale_x_continuous(breaks = seq(from = 0, to = ceiling(max(bias_ci_df$x_vals)), by = 2)) +
   facet_grid(
     rows = vars(Conditioning_Variable), 
     cols = vars(Dependent_Variable),
@@ -895,9 +913,18 @@ for(i in 1:d){
   pdf(file = paste0("Images/Simulation_Study/MVT/High_Dependence/Probabilities/MVT_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
   p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
     geom_polygon(aes(fill = Method), alpha = 0.5) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-    theme(legend.position = "top") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+    theme(legend.position = "top",
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          strip.text = element_text(size = 12),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()) +
     labs(x = "u (Dependent Variable)", y = "Bias") +
+    scale_x_continuous(breaks = seq(from = floor(min(bias_ci_df$x_vals)), to = ceiling(max(bias_ci_df$x_vals)), by = 1)) +
     facet_wrap(~ Dependent_Variable,
                nrow = 2, ncol = 2,
                scales = "free_x",
