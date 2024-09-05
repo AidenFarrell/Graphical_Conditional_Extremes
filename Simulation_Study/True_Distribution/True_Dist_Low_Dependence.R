@@ -231,11 +231,13 @@ fit_Two_Step_Indep <- lapply(1:length(n_excesses), function(i){
 
 ## Give some informed starting place to the graphical and saturated models
 start_par_Two_Step <- lapply(1:length(n_excesses), function(i){
-  lapply(1:d, function(j){lapply(1:n_sim, function(k){
-    cbind(unname(fit_Two_Step_Indep[[i]][[j]][[k]]$par$main[3,]),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[4,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[5,]), 0.5), 2),
-          pmin(pmax(unname(fit_One_Step_Indep[[i]][[j]][[k]]$par$main[6,]), 0.5), 2))})})})
+  lapply(1:d, function(j){
+    lapply(1:n_sim, function(k){
+      cbind(fit_Two_Step_Indep[[i]][[j]][[k]]$par$main[3,],
+            rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))
+    })
+  })
+})
 
 
 ## Graphical
