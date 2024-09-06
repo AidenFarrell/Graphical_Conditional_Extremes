@@ -745,16 +745,11 @@ for(i in 1:d){
 RMSE_Winner$Total <- rowSums(RMSE_Winner)
 RMSE_Winner
 
-## Bias
-# Bias <- function(x, xhat){
-#   mean(x - xhat)
-# }
-
+## MAB
 Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
   sapply(2:length(method_vec), function(k){
     Bias(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
 
-# Bias_min <- sapply(Bias_out, function(x){apply(abs(x), 1, which.min)})
 Bias_min <- sapply(Bias_out, function(x){apply(x, 1, which.min)})
 
 Bias_Winner <- data.frame(matrix(0, ncol = d, nrow = length(method_vec_1)))
