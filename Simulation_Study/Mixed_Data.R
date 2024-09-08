@@ -6,7 +6,7 @@ required_pckgs <- c("fake", "ggplot2", "graphicalExtremes", "igraph", "parallel"
 t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
-## Algorithm to generate data with mixed dependence structures
+## Function to generate data with mixed dependence structures
 mixed_data_generation <- function(n_data, Gamma_MVP, Sigma_MVN){
   
   ## Generate the inner star graph using a MVP distribution
@@ -31,82 +31,6 @@ mixed_data_generation <- function(n_data, Gamma_MVP, Sigma_MVN){
   return(data_all)
 }
 
-## plotting functions for later
-boxplot_MLEs <- function(data, methods, y_lab){
-  
-  ## Extract some information from the data
-  d_data <- length(data)
-  n_methods <- length(methods)
-  p <- ncol(data[[1]])/n_methods
-  n <- nrow(data[[1]])
-  
-  ## get some plotting parameters
-  y_min <- floor(min(sapply(data, min, na.rm = TRUE))/0.1)*0.1
-  y_max <- ceiling(max(sapply(data, max, na.rm = TRUE))/0.1)*0.1
-  
-  ## main data to plot
-  plot_data <- data.frame(y = do.call(c, data))
-  plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
-  plot_data$Method <- factor(plot_data$Method, levels = methods)
-  plot_data$Conditioning_Varaible <- rep(1:d_data, each = p*n_sim*n_methods)
-  plot_data$Conditioning_Varaible <- factor(plot_data$Conditioning_Varaible, levels = 1:d_data)
-  plot_data$Dependent_Variable <- rep(rep(1:p, each = n_sim*n_methods), d_data)
-  plot_data$Dependent_Variable <- factor(plot_data$Dependent_Variable, levels = 1:p)
-  
-  ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
-  
-  ## plot the data
-  plot_out <- ggplot(data = plot_data, aes(x = Dependent_Variable, y = y, fill = Method)) + 
-    geom_boxplot() +
-    theme(legend.position = "top") +
-    labs(x = "Depednent Varaible (j)", y = y_lab) +
-    facet_grid(cols = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels))
-  print(plot_out)
-}
-
-
-boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
-  
-  ## Obtain some information from the data
-  if(!is.list(data)){
-    stop("data must be a list of parameter estimates to plot")
-  }
-  d_data <- length(data)
-  n_methods = length(methods)
-  p <- ncol(data[[1]][[1]])
-  n <- nrow(data[[1]][[1]])
-  
-  ## get some plotting parameters
-  x_labels <- apply(combinations(n = d_data, r = 2, v = 1:d_data, repeats.allowed = TRUE), 1, paste0, collapse = "")
-  
-  ## Construct the plotting data
-  plot_data <- data.frame(y = do.call(c, lapply(1:d_data, function(i){
-    do.call(c, lapply(1:p, function(j){
-      do.call(c, lapply(1:n_methods, function(k){
-        data[[i]][[k]][,j]}))}))})))
-  
-  plot_data$Method = rep(rep(rep(methods, each = n), p), d_data)
-  plot_data$Method <- factor(plot_data$Method, levels = methods)
-  plot_data$Conditioning_Varaible <- rep(1:d_data, each = p*n*n_methods)
-  plot_data$Conditioning_Varaible <- factor(plot_data$Conditioning_Varaible, levels = 1:d_data)
-  plot_data$Pair <- rep(rep(x_labels, each = n*n_methods), d_data)
-  plot_data$Pair <- factor(plot_data$Pair, levels = x_labels)
-  
-  ## Define custom labels for facets
-  facet_labels <- setNames(paste0("i = ", 1:d_data), 1:d_data)
-  
-  plot_out <- ggplot(data = plot_data, aes(x = Pair, y = y, col = Method)) + 
-    geom_boxplot(outlier.shape = NA) +
-    theme(legend.position = "top") +
-    labs(x = "Pair", y = y_lab) +
-    facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
-               scales = "free_y") +
-    geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 0.25)
-  
-  return(plot_out)
-}
-
 ################################################################################
 ## Set working directory
 
@@ -114,6 +38,7 @@ boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
 source("Miscellaneous_Functions/MVAGG_Functions.R")
 source("Miscellaneous_Functions/General_Functions.R")
 source("Miscellaneous_Functions/Transformations.R")
+source("Miscellaneous_Functions/Plotting_Functions.R")
 
 ## Reading in functions required for model fitting
 source("Model_Fitting/Cond_Extremes_MVN_Residuals.R")
@@ -124,6 +49,33 @@ source("Model_Fitting/Cond_Extremes_MVAGG_Residuals_Three_Step.R")
 ## Read in functions for prediction
 source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
+
+################################################################################
+## Read in data
+out <- readRDS("Data/Mixed_Data_D5.RData")
+
+## Obtain the true parameters
+graph_full <- out$par_true$graph
+d <- length(V(graph_full))
+n_sim <- out$par_true$n_sim
+n_data <- out$par_true$n_data
+
+Gamma_MVP <- out$par_true$Gamma_MVP
+Gamma_MVN <- out$par_true$Gamma_MVN
+Sigma_MVN <- solve(Gamma_MVN)
+
+## Transforms
+X_to_Y <- out$transforms
+
+## Obtain the data
+X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+
+## Get the output from the GPD fits
+u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
 
 ################################################################################
 ## DO NOT RUN
@@ -182,36 +134,9 @@ shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$data$Y)})})
 
 ################################################################################
-## Read in data
-out <- readRDS("Data/Mixed_Data_D5.RData")
-
-## Obtain the true parameters
-graph_full <- out$par_true$graph
-d <- length(V(graph_full))
-n_sim <- out$par_true$n_sim
-n_data <- out$par_true$n_data
-
-Gamma_MVP <- out$par_true$Gamma_MVP
-Gamma_MVN <- out$par_true$Gamma_MVN
-Sigma_MVN <- solve(Gamma_MVN)
-
-## Transforms
-X_to_Y <- out$transforms
-
-## Obtain the data
-X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
-Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
-
-## Get the output from the GPD fits
-u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
-qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
-scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
-shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
-
-################################################################################
 
 ## Now we want to subset the data so that each component is large in turn
-dqu <- 0.8
+dqu <- 0.9
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -603,7 +528,7 @@ Gamma_hat_EH <- lapply(1:d, function(j){
 
 ################################################################################
 ## Assess convergence of the parameters
-method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-Step")
+method_vec <- c("One-step - Graphical", "Two-step - Graphical", "Three-step")
 
 # Alpha
 pdf(file = "Images/Simulation_Study/Mixed_Data/Alpha.pdf", width = 15, height = 10)
@@ -673,7 +598,11 @@ ggplot(data = scale_plot_data, aes(x = scale_1, y = scale_2)) +
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1),
        y = c(floor(min(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1,
              ceiling(max(scale_plot_data$scale_1, scale_plot_data$scale_2, na.rm = TRUE)/0.1)*0.1)) +
-  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed)
+  facet_grid(Conditioning_Variable ~ Dependent_Variable, labeller = label_parsed) +
+  theme(axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12))
 dev.off()
 
 # Shape
@@ -686,18 +615,16 @@ boxplot_MLEs(
   methods = method_vec, y_lab = expression(hat(delta)[j ~ "|" ~ i]))
 dev.off()
 
-## Precision matrix
+# Precision matrix
 Gamma_hat_data <- lapply(1:d, function(i){
   t(sapply(1:n_sim, function(j){
-    Add_NA_Matrix(solve(cor(Y_Yi_large[[i]][[j]][,-i])), i)[lower_tri_elements]
+    Add_NA_Matrix(solve(cor(Y_Yi_large[[i]][[j]]))[-i,-i], i)[lower_tri_elements]
   }))
 })
 
-Gamma_hat_data[[3]]
-
-method_vec <- c("Data", 
+method_vec <- c("Data",
                 "One-step - Graphical", "Two-step - Graphical",
-                "Three-step - Graphical", "Three-step - Saturated")
+                "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 
 pdf(file = "Images/Simulation_Study/Mixed_Data/Gamma.pdf", width = 15, height = 10)
 boxplot_MLEs_Cov_Mat(
@@ -705,6 +632,7 @@ boxplot_MLEs_Cov_Mat(
     list(Gamma_hat_data[[i]],
          Gamma_hat_One_Step_Graph[[i]],
          Gamma_hat_Two_Step_Graph[[i]],
+         Gamma_hat_Three_Step_Indep[[i]],
          Gamma_hat_Three_Step_Graph[[i]],
          Gamma_hat_Three_Step_Full[[i]])}),
   methods = method_vec, y_lab = expression(hat(Gamma)[~ "|" ~ i]))
@@ -737,7 +665,7 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 20*n_data, q = dqu),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -745,7 +673,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -753,7 +681,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -761,7 +689,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -769,7 +697,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -777,7 +705,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 50*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 20*n_data, q = dqu),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -789,8 +717,9 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.9
-u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
+q_X <- 0.95
+u_X <- apply(X_prob_calc, 2, quantile, q_X)
+u_X <- rep(2.1, d)
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
@@ -881,7 +810,7 @@ for(i in 1:d){
     data_to_plot$Model = rep(method_vec_1, each = n_sim)
     data_to_plot$Model <- factor(data_to_plot$Model, levels = method_vec_1)
     
-    # pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
+    pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
       lims(y = c(ymin, max(0.4, ymax))) +
@@ -891,13 +820,15 @@ for(i in 1:d){
             legend.box.just = "right",
             legend.margin = margin(6, 6, 6, 6),
             legend.key.size = unit(0.75, 'cm'),
-            legend.title = element_text(size = 15),
-            legend.text = element_text(size = 10),
+            legend.title = element_text(size = 20),
+            legend.text = element_text(size = 12),
+            axis.title.y = element_text(size = 16),
+            axis.text = element_text(size = 12),
             axis.text.x = element_blank(), 
             axis.ticks.x = element_blank()) +
-      geom_hline(yintercept = 0, col = 2, linetype = "dashed", linewidth = 1)
+      geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
     print(p_plot)
-    # dev.off()
+    dev.off()
   }
 }
 
@@ -935,7 +866,6 @@ Bias_Winner
 
 ################################################################################
 ## Get a conditional survival curve for all the univariate probabilities
-
 cond_serv_curve_data <- function(data, u_cond, u_dep, cond_var, dep_var){
   
   ## get the couplings
@@ -971,15 +901,13 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
 }
 
 ## Get the survival functions
-u_min <- apply(sapply(X, function(x){apply(x, 2, min)}), 1, min)
 u_max <- rbind(apply(sapply(X_EH_Original_Margins, function(x){apply(x, 2, max)}), 1, max),
                apply(sapply(X_Three_Step_Graph, function(x){apply(x$Data_Margins, 2, max)}), 1, max),
                apply(sapply(X_HT, function(x){apply(x$Data_Margins, 2, max)}), 1, max),
                apply(X_prob_calc, 2, max))
 u_max <- unname(apply(u_max, 2, max))
 
-u_dep <- lapply(1:d, function(i){
-  seq(from = u_min[i], to = u_max[i], by = 0.01)})
+u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max[i], by = 0.01)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = X_EH_Original_Margins, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
@@ -1037,14 +965,12 @@ bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){
 bias_HT_CI <- lapply(bias_HT, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 
 ## set-up the data frame
-methods <- c("Engelke & Hitz", "Three-Step - Graphical", "Heffernan and Tawn")
+methods <- c("Engelke & Hitz", "Three-step - Graphical")
 n_methods <- length(methods)
 bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c(x, rev(x))})), n_methods), d),
                          y_vals =  c(do.call(c, lapply(bias_EH_CI, function(x){
                            do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))})),
                            do.call(c, lapply(bias_Three_Step_CI, function(x){
-                             do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))})),
-                           do.call(c, lapply(bias_HT_CI, function(x){
                              do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))}))),
                          Method = rep(methods, each = sum(sapply(u_dep, length))*2*d),
                          Conditioning_Variable = rep(rep(1:d, each = sum(sapply(u_dep, length))*2), n_methods),
@@ -1070,12 +996,21 @@ label_x <- function(labels) {
 }
 
 # Create the ggplot
-# pdf(file = "Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
+pdf(file = "Images/Simulation_Study/Mixed_Data/Probabilities/Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-  theme(legend.position = "top") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 12),
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank()) +
   labs(x = "u (Dependent Variable)", y = "Bias") +
+  scale_x_continuous(breaks = seq(from = floor(min(bias_ci_df$x_vals)), to = ceiling(max(bias_ci_df$x_vals)), by = 1)) +
   facet_grid(
     rows = vars(Conditioning_Variable), 
     cols = vars(Dependent_Variable),
@@ -1085,7 +1020,7 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
       Dependent_Variable = as_labeller(label_x, default = label_parsed)
     )
   )
-# dev.off()
+dev.off()
 
 ## 2 x 2 plot of the above for one conditioning variable
 for(i in 1:d){
@@ -1096,12 +1031,21 @@ for(i in 1:d){
   }
   bias_ci_df_cond <- bias_ci_df[which(bias_ci_df$Conditioning_Variable == i),]
   bias_ci_df_cond <- bias_ci_df_cond[-which(bias_ci_df_cond$Dependent_Variable == i),]
-  # pdf(file = paste0("Images/Simulation_Study/MVN/High_Dependence/Probabilities/MVN_Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
+  pdf(file = paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Bias_In_Cond_Surv_Curves_", i, ".pdf"), width = 10, height = 10)
   p <- ggplot(data = bias_ci_df_cond, aes(x = x_vals, y = y_vals)) +
     geom_polygon(aes(fill = Method), alpha = 0.5) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.5) +
-    theme(legend.position = "top") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.5) +
+    theme(legend.position = "top",
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 12),
+          axis.title.x = element_text(size = 16),
+          axis.title.y = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          strip.text = element_text(size = 12),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()) +
     labs(x = "u (Dependent Variable)", y = "Bias") +
+    scale_x_continuous(breaks = seq(from = floor(min(bias_ci_df$x_vals)), to = ceiling(max(bias_ci_df$x_vals)), by = 1)) +
     facet_wrap(~ Dependent_Variable,
                nrow = 2, ncol = 2,
                scales = "free_x",
@@ -1111,7 +1055,7 @@ for(i in 1:d){
                )
     )
   print(p)
-  # dev.off() 
+  dev.off()
 }
 
 ################################################################################

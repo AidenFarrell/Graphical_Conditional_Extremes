@@ -620,6 +620,10 @@ q_X <- 0.9
 u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, mean)
 u_X <- rep(1.25, d)
 
+q_X <- 0.9
+u_X <- apply(X_prob_calc, 2, quantile, q_X)
+u_X
+
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
     p_data_surv_multi(data = X_prob_calc, cond = i, u = u_X, uncon = z)})}))
@@ -700,7 +704,7 @@ method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
                 "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 method_vec_1 <- method_vec[-1]
-for(i in 1:1){
+for(i in 1:d){
   for(j in 1:length(uncon[[1]])){
     ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
     ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
@@ -799,8 +803,8 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
   return(cond_serv_out)
 }
 
-u_dep <- lapply(1:d, function(i){
-  seq(from = u_X[i], to = max(c(sapply(X_EH_Original_Margins, function(x){x[,i]}), sapply(X_Three_Step_Graph, function(x){x$Data_Margins[,i]}))), by = 0.01)})
+u_max <- 11
+u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max, by = 0.01)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = X_EH_Original_Margins, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
@@ -844,7 +848,7 @@ bias_EH_CI <- lapply(bias_EH, function(x){lapply(x, function(y){t(apply(y, 1, qu
 bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 
 ## set-up the data frame
-methods <- c("Engelke & Hitz", "Three-Step - Graphical")
+methods <- c("Engelke & Hitz", "Three-step - Graphical")
 n_methods <- length(methods)
 bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c(x, rev(x))})), n_methods), d),
                          y_vals =  c(do.call(c, lapply(bias_EH_CI, function(x){
@@ -858,6 +862,8 @@ bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c
 bias_ci_df$Method <- factor(bias_ci_df$Method, levels = methods)
 bias_ci_df$Conditioning_Variable <- factor(bias_ci_df$Conditioning_Variable, levels = unique(bias_ci_df$Conditioning_Variable))
 bias_ci_df$Dependent_Variable <- factor(bias_ci_df$Dependent_Variable, levels = unique(bias_ci_df$Dependent_Variable))
+
+bias_ci_df <- bias_ci_df[which(bias_ci_df$x_vals <= 11),]
 
 
 # Updated custom labeller function for rows

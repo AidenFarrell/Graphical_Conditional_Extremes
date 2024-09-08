@@ -561,7 +561,7 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 20*n_data, q = dqu),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -569,7 +569,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -577,7 +577,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -585,7 +585,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -593,7 +593,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -601,7 +601,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 20*n_data, q = dqu),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -614,8 +614,8 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 
 ## threshold above which to calculate the probabilities
 q_X <- 0.85
-u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
-u_X <- rep(0.85, d)
+u_X <- apply(X_prob_calc, 2, quantile, q_X)
+u_X
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
@@ -706,7 +706,7 @@ for(i in 1:d){
     data_to_plot$Model = rep(method_vec_1, each = n_sim)
     data_to_plot$Model <- factor(data_to_plot$Model, levels = method_vec_1)
     
-    # pdf(paste0("Images/Simulation_Study/MVT/Low_Dependence/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
+    pdf(paste0("Images/Simulation_Study/MVT/Low_Dependence/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
       lims(y = c(ymin, max(0.4, ymax))) +
@@ -724,7 +724,7 @@ for(i in 1:d){
             axis.ticks.x = element_blank()) +
       geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
     print(p_plot)
-    # dev.off()
+    dev.off()
   }
 }
 
@@ -796,8 +796,8 @@ cond_serv_curve_model <- function(data, u_cond, u_dep, cond_var, dep_var){
   return(cond_serv_out)
 }
 
-u_dep <- lapply(1:d, function(i){
-  seq(from = u_X[i], to = max(c(sapply(X_EH_Original_Margins, function(x){x[,i]}), sapply(X_Three_Step_Graph, function(x){x$Data_Margins[,i]}))), by = 0.01)})
+u_max <- 6
+u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max, by = 0.01)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = X_EH_Original_Margins, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
@@ -841,7 +841,7 @@ bias_EH_CI <- lapply(bias_EH, function(x){lapply(x, function(y){t(apply(y, 1, qu
 bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 
 ## set-up the data frame
-methods <- c("Engelke & Hitz", "Three-Step - Graphical")
+methods <- c("Engelke & Hitz", "Three-step - Graphical")
 n_methods <- length(methods)
 bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c(x, rev(x))})), n_methods), d),
                          y_vals =  c(do.call(c, lapply(bias_EH_CI, function(x){
@@ -872,7 +872,6 @@ label_x <- function(labels) {
 }
 
 # Create the ggplot
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
 pdf(file = "Images/Simulation_Study/MVT/Low_Dependence/Probabilities/MVT_Bias_In_Cond_Surv_Curves.pdf", width = 15, height = 15)
 ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
   geom_polygon(aes(fill = Method), alpha = 0.5) +
@@ -932,7 +931,7 @@ for(i in 1:d){
                )
     )
   print(p)
-  dev.off() 
+  dev.off()
 }
 
 ################################################################################

@@ -124,7 +124,7 @@ Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y
 
 ################################################################################
 ## Now we want to subset the data so that each component is large in turn
-dqu <- 0.9
+dqu <- 0.8
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -560,7 +560,7 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 20*n_data, q = dqu),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -568,7 +568,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -576,7 +576,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -584,7 +584,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -592,7 +592,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -600,7 +600,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 5*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 20*n_data, q = dqu),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -612,7 +612,7 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.95
+q_X <- 0.9
 u_X <- apply(X_prob_calc, 2, quantile, q_X)
 
 p_true_X <- t(sapply(1:d, function(i){
@@ -938,7 +938,7 @@ for(i in 1:d){
                )
     )
   print(p)
-  dev.off() 
+  dev.off()
 }
 
 ################################################################################
