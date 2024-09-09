@@ -74,14 +74,14 @@ Cond_Extremes_MVAGG_Three_Step <- function(data, cond = 1, graph = NA,
   if(!is.numeric(start_HT) | !is.numeric(start_AGG)){
     stop("start_HT and start_AGG must be vectors of length 2 and 4, respectively, or matrices of dimension (d - 1) x 2 and (d-1) x 4, respectively")
   }
-  if(length(start_HT) != 2*(d-1) | length(start_AGG) != 4*(d-1)){
-    stop("start_HT and start_AGG must be vectors of length 2 and 4, respectively, or matrices of dimension (d - 1) x 2 and (d-1) x 4, respectively")
-  }
   if(length(start_HT) == 2){
     start_HT <- matrix(rep(start_HT, d-1), ncol = 2, byrow = TRUE)
   }
   if(length(start_AGG) == 4){
     start_AGG <- matrix(rep(start_AGG, d-1), ncol = 4, byrow = TRUE)
+  }
+  if(length(start_HT) != 2*(d-1) | length(start_AGG) != 4*(d-1)){
+    stop("start_HT and start_AGG must be vectors of length 2 and 4, respectively, or matrices of dimension (d - 1) x 2 and (d-1) x 4, respectively")
   }
   if(any(abs(start_HT) > 1)){
     stop("Initial starting values are outside the parameter space for Heffernan and Tawn model")
