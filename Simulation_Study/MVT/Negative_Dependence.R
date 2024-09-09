@@ -130,7 +130,7 @@ Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y
 ################################################################################
 
 ## Now we want to subset the data so that each component is large in turn
-dqu <- 0.9
+dqu <- 0.8
 Y_u <- qlaplace(dqu)
 
 ## level i corresponds to data set ith component in the data set given that i is large
@@ -615,10 +615,7 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.95
-u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, max)
-
-q_X <- 0.95
+q_X <- 0.9
 u_X <- apply(X_prob_calc, 2, quantile, q_X)
 u_X
 
@@ -714,10 +711,10 @@ for(i in 1:d){
     pdf(paste0("Images/Simulation_Study/MVT/Negative_Dependence/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
-      lims(y = c(ymin, max(0.4, ymax))) +
+      lims(y = c(min(-0.4, ymin), ymax)) +
       labs(y = "Bias", title = plot_titles[[i]][[j]]) +
-      theme(legend.position = c(.95, .95),
-            legend.justification = c("right", "top"),
+      theme(legend.position = c(.95, .05),
+            legend.justification = c("right", "bottom"),
             legend.box.just = "right",
             legend.margin = margin(6, 6, 6, 6),
             legend.key.size = unit(0.75, 'cm'),
@@ -866,6 +863,8 @@ cdf_true_df <- data.frame(x_vals = rep(do.call(c, u_dep), d),
 cdf_true_df$Conditioning_Variable <- factor(cdf_true_df$Conditioning_Variable, levels = unique(cdf_true_df$Conditioning_Variable))
 cdf_true_df$Dependent_Variable <- factor(cdf_true_df$Dependent_Variable, levels = unique(cdf_true_df$Dependent_Variable))
 
+ci_df <- ci_df[which(ci_df$x_vals > -7 & ci_df$x_vals < 7),]
+cdf_true_df <- cdf_true_df[which(cdf_true_df$x_vals > -7 & cdf_true_df$x_vals < 7),]
 # Updated custom labeller function for rows
 label_y <- function(labels) {
   sapply(labels, function(label) {
@@ -881,7 +880,6 @@ label_x <- function(labels) {
 }
 
 # Create the ggplot
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
 pdf(file = "Images/Simulation_Study/MVT/Negative_Dependence/Probabilities/MVT_Cond_CDF_Curves.pdf", width = 15, height = 15)
 ggplot() +
   geom_polygon(data = ci_df, aes(x = x_vals, y = y_vals, fill = Method), alpha = 0.5) +
