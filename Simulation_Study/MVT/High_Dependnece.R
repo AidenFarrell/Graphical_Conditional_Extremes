@@ -620,10 +620,6 @@ q_X <- 0.9
 u_X <- apply(sapply(X, function(x){apply(x, 2, quantile, q_X)}), 1, mean)
 u_X <- rep(1.25, d)
 
-q_X <- 0.9
-u_X <- apply(X_prob_calc, 2, quantile, q_X)
-u_X
-
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
     p_data_surv_multi(data = X_prob_calc, cond = i, u = u_X, uncon = z)})}))
