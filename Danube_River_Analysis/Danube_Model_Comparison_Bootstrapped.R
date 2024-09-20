@@ -65,6 +65,9 @@ source("Miscellaneous_Functions/General_Functions.R")
 ## Reading in functions to transform the data
 source("Miscellaneous_Functions/Transformations.R")
 
+## Reading in functions to infer the graph using a glasso on the residuals of the model
+source("Graphical_Selection/Graphical_Selection.R")
+
 ## Reading in functions required for model fitting
 source("Model_Fitting/Cond_Extremes_MVAGG_Residuals_Three_Step.R")
 
@@ -78,7 +81,10 @@ layout <- cbind(danube$info$PlotCoordX, danube$info$PlotCoordY)
 V(danube_graph)$size <- 15
 V(danube_graph)$label.cex <- 2
 par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
-plot(danube_graph, layout = layout, edge.width = 10)
+pdf(file = "Images/Danube/Bootstrapped_Ouput/Danube_River.pdf", width = 10, height = 10)
+plot(danube_graph, layout = layout)
+dev.off()
+
 
 ## Get the flow connections for later
 d <- length(V(danube_graph))
@@ -121,6 +127,77 @@ flow_connected <- which(flow_connections == 1, arr.ind = TRUE)
 flow_connected <- flow_connected[which(flow_connected[,1] < flow_connected[,2]),]
 flow_connected <- flow_connected[order(flow_connected[,1]),]
 flow_connected <- as.data.frame(flow_connected)
+
+################################################################################
+## Infer the graph using Algorithm 3.4 in the paper
+
+## Transform the data onto standard Laplace margins
+d <- ncol(danube$data_clustered)
+n_data <- nrow(danube$data_clustered)
+n_sim <- 1
+
+danube_data_list <- lapply(apply(danube$data_clustered, 2, list), function(x){x[[1]]})
+X_to_Y <- mcmapply(FUN = X_to_Laplace,
+                   x = danube_data_list,
+                   MoreArgs = list(q = seq(0.55, 0.925, by = 0.01)),
+                   SIMPLIFY = FALSE,
+                   mc.cores = detectCores() - 1)
+
+## Get the output
+u_final <- unname(sapply(X_to_Y, function(x){unname(x$par$u)}))
+qu_final <- unname(sapply(X_to_Y, function(x){unname(x$par$qu)}))
+scale_final <- unname(sapply(X_to_Y, function(x){unname(x$par$scale)}))
+shape_final <- unname(sapply(X_to_Y, function(x){unname(x$par$shape)}))
+Y <- sapply(X_to_Y, function(x){x$data$Y})
+
+## Now we want to subset the data so that each component is large in turn
+dqu <- 0.8
+Y_u <- qlaplace(dqu)
+
+Y_Yi_large <- rep(list(list()), d)
+for(i in 1:d){
+  Y_Yi_large[[i]] <- Y[which(Y[,i] > Y_u),]
+}
+
+## Infer the graph
+rho <- seq(0.45, 0.5, by = 0.01)
+n_rho <- length(rho)
+Inferred_Adj_Matrices <- lapply(rho, function(x){
+  mcmapply(FUN = Infer_Adj_Matrix_glasso_residuals,
+           data = Y_Yi_large,
+           cond = 1:d,
+           MoreArgs = list(rho = x,
+                           v = ceiling(max(Y)) + 1),
+           mc.cores = detectCores() - 1,
+           SIMPLIFY = FALSE)
+})
+
+## Get the inferred weighted adjacency matrices per rho
+Inferred_Adj_Matrices_per_rho <- lapply(Inferred_Adj_Matrices, Combine_Sub_Adjacency_Matrices)
+
+## Prune the edges for each value of rho
+Inferred_Edges_per_rho <- lapply(Inferred_Adj_Matrices_per_rho, function(x){which(x > (d-2)/2, arr.ind = TRUE)})
+
+## Get the output as an adjacency matrix
+Inferred_Sub_Matrices_per_rho <- rep(list(matrix(0, d, d)), n_rho)
+for(i in 1:n_rho){
+  Inferred_Sub_Matrices_per_rho[[i]][Inferred_Edges_per_rho[[i]]] <- 1
+}
+
+## From the pruned graphs per rho, prune again over the various rho
+Inferred_Adj_Matrix_Weighted_Final <- Reduce("+", Inferred_Sub_Matrices_per_rho)
+Inferred_Edges_Final <- which(Inferred_Adj_Matrix_Weighted_Final > n_rho/2, arr.ind = TRUE)
+Inferred_Adj_Matrix_Final <- matrix(0, d, d)
+Inferred_Adj_Matrix_Final[Inferred_Edges_Final] <- 1
+
+## Final graph
+Inferred_Graph <- graph_from_adjacency_matrix(Inferred_Adj_Matrix_Final, mode = "undirected")
+V(Inferred_Graph)$size <- 15
+V(Inferred_Graph)$label.cex <- 2
+par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
+pdf(file = "Images/Danube/Bootstrapped_Ouput/Danube_Inferred_Glasso_Residuals.pdf", width = 10, height = 10)
+plot(Inferred_Graph, layout = layout)
+dev.off()
 
 ################################################################################
 ## DO NOT RUN
@@ -218,6 +295,17 @@ fit_MVAGG_Three_Step_Full <- lapply(1:n_boot, function(i){
            mc.cores = detectCores() - 1)
 })
 
+fit_MVAGG_Three_Step_Inferred_Graph <- lapply(1:n_boot, function(i){
+  mcmapply(FUN = Cond_Extremes_MVAGG_Three_Step,
+           data = Y_Yi_large[[i]], 
+           cond = 1:d,
+           MoreArgs = list(graph = Inferred_Graph,
+                           maxit = 1e+9,
+                           v = v),
+           SIMPLIFY = FALSE,
+           mc.cores = detectCores() - 1)
+})
+
 ################################################################################
 ## The AGG parameters may need alternative starting values
 ## Below will fix this
@@ -296,6 +384,43 @@ while(any(sapply(Index_Three_Step_Full, length) > 0)){
   }
 }
 
+Index_Three_Step_Inferred_Graph <- lapply(fit_MVAGG_Three_Step_Inferred_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+count <- 0
+while(any(sapply(Index_Three_Step_Inferred_Graph, length) > 0)){
+  for(i in 1:n_boot){
+    if(is_empty(Index_Three_Step_Inferred_Graph[[i]])){
+      next()
+    }
+    else{
+      start_par_HT <- c(runif(1, min = 0.1, max = 0.5), runif(1, min = 0.1, max = 0.3))
+      start_par_AGG <- c(runif(1, -2, 2), runif(1, 0.5, 5), runif(1, 0.5, 5), runif(1, 0.5, 3))
+      
+      ind <- Index_Three_Step_Inferred_Graph[[i]]
+      for(j in 1:length(ind)){
+        fit_MVAGG_Three_Step_Inferred_Graph[[i]][[ind[j]]] <-
+          try(Cond_Extremes_MVAGG_Three_Step(data = Y_Yi_large[[i]][[ind[j]]],
+                                             cond = ind[j],
+                                             graph = danube_graph,
+                                             v = v,
+                                             start_HT = start_par_HT,
+                                             start_AGG = start_par_AGG,
+                                             maxit = 1e+9),
+              silent = TRUE)
+      }
+    }
+  }
+  count <- count + 1
+  print(paste0(count, " set of starting parameters tested"))
+  if(count >= 100){
+    stop("100 starting values attempted")
+  }
+  
+  Index_Three_Step_Inferred_Graph <- lapply(fit_MVAGG_Three_Step_Inferred_Graph, function(x){which(sapply(x, function(y){is.na(y$convergence)}))})
+  if(all(sapply(Index_Three_Step_Inferred_Graph, length) == 0)){
+    print("Model Fitting Complete")
+  }
+}
+
 ################################################################################
 ## Simulate surfaces from the model
 
@@ -327,6 +452,14 @@ X_Three_Step_Full <- mcmapply(Sim_Surface_MVAGG,
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
+## Three-step graphical model inferred graph
+X_Three_Step_Inferred_Graph <- mcmapply(Sim_Surface_MVAGG,
+                                        transforms = X_to_Y,
+                                        CMEVM_fits = fit_MVAGG_Three_Step_Inferred_Graph,
+                                        MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                                        SIMPLIFY = FALSE,
+                                        mc.cores = detectCores() - 1)
+
 ################################################################################
 ## Obtain summary statistics from the data
 ## Look at eta, chi and chibar
@@ -334,17 +467,17 @@ X_Three_Step_Full <- mcmapply(Sim_Surface_MVAGG,
 u <- c(0.8, 0.85, 0.9)
 n_u <- length(u)
 
-eta_boot <- eta_EH <- eta_HT <- eta_CMEVM_Graph <- eta_CMEVM_Full <- array(NA, dim = c(d, d, n_u, n_boot))
-eta_boot_med <- eta_EH_med <- eta_HT_med <- eta_CMEVM_Graph_med <- eta_CMEVM_Full_med <- array(NA, dim = c(d, d, n_u))
-eta_boot_se <- eta_EH_se <- eta_HT_se <- eta_CMEVM_Graph_se <- eta_CMEVM_Full_se <- array(NA, dim = c(d, d, n_u))
+eta_boot <- eta_EH <- eta_HT <- eta_CMEVM_Graph <- eta_CMEVM_Full <- eta_CMEVM_Inferred_Graph <- array(NA, dim = c(d, d, n_u, n_boot))
+eta_boot_med <- eta_EH_med <- eta_HT_med <- eta_CMEVM_Graph_med <- eta_CMEVM_Full_med <- eta_CMEVM_Inferred_Graph_med <- array(NA, dim = c(d, d, n_u))
+eta_boot_se <- eta_EH_se <- eta_HT_se <- eta_CMEVM_Graph_se <- eta_CMEVM_Full_se <- eta_CMEVM_Inferred_Graph_se <- array(NA, dim = c(d, d, n_u))
 
-chi_boot <- chi_EH <- chi_HT <- chi_CMEVM_Graph <- chi_CMEVM_Full <- array(NA, dim = c(d, d, n_u, n_boot))
-chi_boot_med <- chi_EH_med <- chi_HT_med <- chi_CMEVM_Graph_med <- chi_CMEVM_Full_med <- array(NA, dim = c(d, d, n_u))
-chi_boot_se <- chi_EH_se <- chi_HT_se <- chi_CMEVM_Graph_se <- chi_CMEVM_Full_se <- array(NA, dim = c(d, d, n_u))
+chi_boot <- chi_EH <- chi_HT <- chi_CMEVM_Graph <- chi_CMEVM_Full <- chi_CMEVM_Inferred_Graph <- array(NA, dim = c(d, d, n_u, n_boot))
+chi_boot_med <- chi_EH_med <- chi_HT_med <- chi_CMEVM_Graph_med <- chi_CMEVM_Full_med <- chi_CMEVM_Inferred_Graph_med <- array(NA, dim = c(d, d, n_u))
+chi_boot_se <- chi_EH_se <- chi_HT_se <- chi_CMEVM_Graph_se <- chi_CMEVM_Full_se <- chi_CMEVM_Inferred_Graph_se <- array(NA, dim = c(d, d, n_u))
 
-chibar_boot <- chibar_EH <- chibar_HT <- chibar_CMEVM_Graph <- chibar_CMEVM_Full <- array(NA, dim = c(d, d, n_u, n_boot))
-chibar_boot_med <- chibar_EH_med <- chibar_HT_med <- chibar_CMEVM_Graph_med <- chibar_CMEVM_Full_med <- array(NA, dim = c(d, d, n_u))
-chibar_boot_se <- chibar_EH_se <- chibar_HT_se <- chibar_CMEVM_Graph_se <- chibar_CMEVM_Full_se <- array(NA, dim = c(d, d, n_u))
+chibar_boot <- chibar_EH <- chibar_HT <- chibar_CMEVM_Graph <- chibar_CMEVM_Full <- chibar_CMEVM_Inferred_Graph <- array(NA, dim = c(d, d, n_u, n_boot))
+chibar_boot_med <- chibar_EH_med <- chibar_HT_med <- chibar_CMEVM_Graph_med <- chibar_CMEVM_Full_med <- chibar_CMEVM_Inferred_Graph_med <- array(NA, dim = c(d, d, n_u))
+chibar_boot_se <- chibar_EH_se <- chibar_HT_se <- chibar_CMEVM_Graph_se <- chibar_CMEVM_Full_se <- chibar_CMEVM_Inferred_Graph_se <- array(NA, dim = c(d, d, n_u))
 for(i in 1:d){
   for(j in 1:d){
     if(j < i){
@@ -372,6 +505,10 @@ for(i in 1:d){
         tail_CMEVM_Full <- taildep(data = X_Three_Step_Full[[k]]$Data_Margins[,c(i,j)], u = u, plot = FALSE)
         eta_CMEVM_Full[i,j,,k] <- eta_CMEVM_Full[j,i,,k] <- tail_CMEVM_Full$eta[,1]
         chi_CMEVM_Full[i,j,,k] <- chi_CMEVM_Full[j,i,,k] <- tail_CMEVM_Full$chi[,1]
+        
+        tail_CMEVM_Inferred_Graph <- taildep(data = X_Three_Step_Inferred_Graph[[k]]$Data_Margins[,c(i,j)], u = u, plot = FALSE)
+        eta_CMEVM_Inferred_Graph[i,j,,k] <- eta_CMEVM_Full[j,i,,k] <- tail_CMEVM_Inferred_Graph$eta[,1]
+        chi_CMEVM_Inferred_Graph[i,j,,k] <- chi_CMEVM_Full[j,i,,k] <- tail_CMEVM_Inferred_Graph$chi[,1]
 
         ## chibar output
         chibar_boot[i,j,,k] <- chibar_boot[j,i,,k] <- chibar_emp(data = X[[k]][,c(i,j)], u = u)
@@ -379,6 +516,7 @@ for(i in 1:d){
         chibar_HT[i,j,,k] <- chibar_HT[j,i,,k] <- chibar_emp(data = X_HT[[k]]$Data_Margins[,c(i,j)], u = u)
         chibar_CMEVM_Graph[i,j,,k] <- chibar_CMEVM_Graph[j,i,,k] <- chibar_emp(data = X_Three_Step_Graph[[k]]$Data_Margins[,c(i,j)], u = u)
         chibar_CMEVM_Full[i,j,,k] <- chibar_CMEVM_Full[j,i,,k] <- chibar_emp(data = X_Three_Step_Full[[k]]$Data_Margins[,c(i,j)], u = u)
+        chibar_CMEVM_Inferred_Graph[i,j,,k] <- chibar_CMEVM_Inferred_Graph[j,i,,k] <- chibar_emp(data = X_Three_Step_Inferred_Graph[[k]]$Data_Margins[,c(i,j)], u = u)
       }
       
       ## Eta
@@ -389,6 +527,7 @@ for(i in 1:d){
       eta_HT_med[i,j,] <- eta_HT_med[j,i,] <- apply(eta_HT[i,j,,], 1, quantile, 0.5)
       eta_CMEVM_Graph_med[i,j,] <- eta_CMEVM_Graph_med[j,i,] <- apply(eta_CMEVM_Graph[i,j,,], 1, quantile, 0.5)
       eta_CMEVM_Full_med[i,j,] <- eta_CMEVM_Full_med[j,i,] <- apply(eta_CMEVM_Full[i,j,,], 1, quantile, 0.5)
+      eta_CMEVM_Inferred_Graph_med[i,j,] <- eta_CMEVM_Inferred_Graph_med[j,i,] <- apply(eta_CMEVM_Inferred_Graph[i,j,,], 1, quantile, 0.5)
 
       # ## Get the standard error over the samples
       eta_boot_se[i,j,] <- eta_boot_se[j,i,] <- apply(eta_boot[i,j,,], 1, sd)
@@ -396,6 +535,7 @@ for(i in 1:d){
       eta_HT_se[i,j,] <- eta_HT_se[j,i,] <- apply(eta_HT[i,j,,], 1, sd)
       eta_CMEVM_Graph_se[i,j,] <- eta_CMEVM_Graph_se[j,i,] <- apply(eta_CMEVM_Graph[i,j,,], 1, sd)
       eta_CMEVM_Full_se[i,j,] <- eta_CMEVM_Full_se[j,i,] <- apply(eta_CMEVM_Full[i,j,,], 1, sd)
+      eta_CMEVM_Inferred_Graph_se[i,j,] <- eta_CMEVM_Inferred_Graph_se[j,i,] <- apply(eta_CMEVM_Inferred_Graph[i,j,,], 1, sd)
 
       ## Chi
 
@@ -405,13 +545,15 @@ for(i in 1:d){
       chi_HT_med[i,j,] <- chi_HT_med[j,i,] <- apply(chi_HT[i,j,,], 1, quantile, 0.5)
       chi_CMEVM_Graph_med[i,j,] <- chi_CMEVM_Graph_med[j,i,] <- apply(chi_CMEVM_Graph[i,j,,], 1, quantile, 0.5)
       chi_CMEVM_Full_med[i,j,] <- chi_CMEVM_Full_med[j,i,] <- apply(chi_CMEVM_Full[i,j,,], 1, quantile, 0.5)
-
+      chi_CMEVM_Inferred_Graph_med[i,j,] <- chi_CMEVM_Inferred_Graph_med[j,i,] <- apply(chi_CMEVM_Inferred_Graph[i,j,,], 1, quantile, 0.5)
+      
       ## Get the standard error over the samples
       chi_boot_se[i,j,] <- chi_boot_se[j,i,] <- apply(chi_boot[i,j,,], 1, sd)
       chi_EH_se[i,j,] <- chi_EH_se[j,i,] <- apply(chi_EH[i,j,,], 1, sd)
       chi_HT_se[i,j,] <- chi_HT_se[j,i,] <- apply(chi_HT[i,j,,], 1, sd)
       chi_CMEVM_Graph_se[i,j,] <- chi_CMEVM_Graph_se[j,i,] <- apply(chi_CMEVM_Graph[i,j,,], 1, sd)
       chi_CMEVM_Full_se[i,j,] <- chi_CMEVM_Full_se[j,i,] <- apply(chi_CMEVM_Full[i,j,,], 1, sd)
+      chi_CMEVM_Inferred_Graph_se[i,j,] <- chi_CMEVM_Inferred_Graph_se[j,i,] <- apply(chi_CMEVM_Inferred_Graph[i,j,,], 1, sd)
 
       ## Chibar
 
@@ -421,19 +563,21 @@ for(i in 1:d){
       chibar_HT_med[i,j,] <- chibar_HT_med[j,i,] <- apply(chibar_HT[i,j,,], 1, quantile, 0.5)
       chibar_CMEVM_Graph_med[i,j,] <- chibar_CMEVM_Graph_med[j,i,] <- apply(chibar_CMEVM_Graph[i,j,,], 1, quantile, 0.5)
       chibar_CMEVM_Full_med[i,j,] <- chibar_CMEVM_Full_med[j,i,] <- apply(chibar_CMEVM_Full[i,j,,], 1, quantile, 0.5)
-
+      chibar_CMEVM_Inferred_Graph_med[i,j,] <- chibar_CMEVM_Inferred_Graph_med[j,i,] <- apply(chibar_CMEVM_Inferred_Graph[i,j,,], 1, quantile, 0.5)
+      
       ## Get the standard error over the samples
       chibar_boot_se[i,j,] <- chibar_boot_se[j,i,] <- apply(chibar_boot[i,j,,], 1, sd)
       chibar_EH_se[i,j,] <- chibar_EH_se[j,i,] <- apply(chibar_EH[i,j,,], 1, sd)
       chibar_HT_se[i,j,] <- chibar_HT_se[j,i,] <- apply(chibar_HT[i,j,,], 1, sd)
       chibar_CMEVM_Graph_se[i,j,] <- chibar_CMEVM_Graph_se[j,i,] <- apply(chibar_CMEVM_Graph[i,j,,], 1, sd)
       chibar_CMEVM_Full_se[i,j,] <- chibar_CMEVM_Full_se[j,i,] <- apply(chibar_CMEVM_Full[i,j,,], 1, sd)
+      chibar_CMEVM_Inferred_Graph_se[i,j,] <- chibar_CMEVM_Inferred_Graph_se[j,i,] <- apply(chibar_CMEVM_Inferred_Graph[i,j,,], 1, sd)
     }
   } 
 }
 
 ## plot the output
-methods <- c("Engelke & Hitz", "Three-step - Graphical", "Three-step - Saturated")
+methods <- c("Engelke & Hitz", "Three-step - Graphical", "Three-step - Saturated", "Three-step - Graphical (Inferred)")
 n_methods <- length(methods)
 
 elements <- lapply(apply(combinations(d, r = 2, v = 1:d), 1, list), function(x){x[[1]]})
@@ -448,11 +592,13 @@ eta_out_comp$Method <- rep(methods, each = n_elements*n_u)
 eta_out_comp$x <- rep(do.call(c, lapply(1:n_u, function(i){eta_boot_med[,,i][lower_tri_flow]})), n_methods)
 eta_out_comp$y <- c(do.call(c, lapply(1:n_u, function(i){eta_EH_med[,,i][lower_tri_flow]})),
                     do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Graph_med[,,i][lower_tri_flow]})),
-                    do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Full_med[,,i][lower_tri_flow]})))
+                    do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Full_med[,,i][lower_tri_flow]})),
+                    do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Inferred_Graph_med[,,i][lower_tri_flow]})))
 
 eta_out_comp$se <- c(do.call(c, lapply(1:n_u, function(i){eta_EH_se[,,i][lower_tri_flow]})),
                      do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Graph_se[,,i][lower_tri_flow]})),
-                     do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Full_se[,,i][lower_tri_flow]})))
+                     do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Full_se[,,i][lower_tri_flow]})),
+                     do.call(c, lapply(1:n_u, function(i){eta_CMEVM_Inferred_Graph_se[,,i][lower_tri_flow]})))
 
 eta_out_comp$u <- factor(eta_out_comp$u, levels = u)
 eta_out_comp$Method <- factor(eta_out_comp$Method, levels = methods)
@@ -464,16 +610,25 @@ label_y <- function(labels) {
 }
 
 pdf("Images/Danube/Bootstrapped_Ouput/ETA_Comp.pdf", height = 15, width = 15)
-ggplot(data = eta_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected)) +
-  lims(x = c(1/2, 1), y = c(1/2, 1)) +
+ggplot(data = eta_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected, alpha = Connected)) +
+  lims(x = c(0.6, 1), y = c(0.6, 1)) +
   labs(x = "Empirical", y = "Theoretical", shape = "Flow-connected", color = "Standard error") +
   geom_abline(intercept = 0, slope = 1, col = "black", linetype = "dashed", linewidth = 0.5) +
-  scale_shape_manual(values = c(16, 17)) +
+  scale_shape_manual(values = c(1, 2)) +
   scale_colour_gradient(low = "blue", high = "red",
-                        breaks = c(0, 0.02, 0.04, 0.06, 0.08),
-                        guide = guide_colorbar(barwidth = 10, barheight = 0.5)) +
-  theme(legend.position = "top") +
-  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.75)) +  # Adjust the fill legend
+                        breaks = c(0.02, 0.03, 0.04, 0.05)) +
+  scale_alpha_manual(values = c(0.75, 0.3)) +  # Set transparency: 0.3 for FALSE, 1 for TRUE
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        strip.text.y = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16)) +
+  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.9,
+                              barwidth = 15),  
+         shape = guide_legend(title.position = "left"),
+         alpha = "none") +
   facet_grid(cols = vars(Method), rows = vars(u),
              labeller = labeller(u = as_labeller(label_y, default = label_parsed)))
 dev.off()
@@ -487,11 +642,13 @@ chi_out_comp$Method <- rep(methods, each = n_elements*n_u)
 chi_out_comp$x <- rep(do.call(c, lapply(1:n_u, function(i){chi_boot_med[,,i][lower_tri_flow]})), n_methods)
 chi_out_comp$y <- c(do.call(c, lapply(1:n_u, function(i){chi_EH_med[,,i][lower_tri_flow]})),
                     do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Graph_med[,,i][lower_tri_flow]})),
-                    do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Full_med[,,i][lower_tri_flow]})))
+                    do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Full_med[,,i][lower_tri_flow]})),
+                    do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Inferred_Graph_med[,,i][lower_tri_flow]})))
 
 chi_out_comp$se <- c(do.call(c, lapply(1:n_u, function(i){chi_EH_se[,,i][lower_tri_flow]})),
                      do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Graph_se[,,i][lower_tri_flow]})),
-                     do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Full_se[,,i][lower_tri_flow]})))
+                     do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Full_se[,,i][lower_tri_flow]})),
+                     do.call(c, lapply(1:n_u, function(i){chi_CMEVM_Inferred_Graph_se[,,i][lower_tri_flow]})))
 
 chi_out_comp$u <- factor(chi_out_comp$u, levels = u)
 chi_out_comp$Method <- factor(chi_out_comp$Method, levels = methods)
@@ -503,14 +660,25 @@ label_y <- function(labels) {
 }
 
 pdf("Images/Danube/Bootstrapped_Ouput/Chi_Comp.pdf", height = 15, width = 15)
-ggplot(data = chi_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected)) +
-  lims(x = c(0, 1), y = c(0, 1)) +
+ggplot(data = chi_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected, alpha = Connected)) +
+  lims(x = c(0.2, 1), y = c(0.2, 1)) +
   labs(x = "Empirical", y = "Theoretical", shape = "Flow-connected", color = "Standard error") +
   geom_abline(intercept = 0, slope = 1, col = "black", linetype = "dashed", linewidth = 0.5) +
-  scale_shape_manual(values = c(16, 17)) +
-  scale_colour_gradient(low = "blue", high = "red") +
-  theme(legend.position = "top") +
-  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.75)) +  # Adjust the fill legend
+  scale_shape_manual(values = c(1, 2)) +
+  scale_colour_gradient(low = "blue", high = "red",
+                        breaks = c(0.02, 0.04, 0.06, 0.08)) +
+  scale_alpha_manual(values = c(0.75, 0.3)) +  # Set transparency: 0.3 for FALSE, 1 for TRUE
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        strip.text.y = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16)) +
+  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.9,
+                              barwidth = 15),  
+         shape = guide_legend(title.position = "left"),
+         alpha = "none") +
   facet_grid(cols = vars(Method), rows = vars(u),
              labeller = labeller(u = as_labeller(label_y, default = label_parsed)))
 dev.off()
@@ -524,11 +692,13 @@ chibar_out_comp$Method <- rep(methods, each = n_elements*n_u)
 chibar_out_comp$x <- rep(do.call(c, lapply(1:n_u, function(i){chibar_boot_med[,,i][lower_tri_flow]})), n_methods)
 chibar_out_comp$y <- c(do.call(c, lapply(1:n_u, function(i){chibar_EH_med[,,i][lower_tri_flow]})),
                     do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Graph_med[,,i][lower_tri_flow]})),
-                    do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Full_med[,,i][lower_tri_flow]})))
+                    do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Full_med[,,i][lower_tri_flow]})),
+                    do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Inferred_Graph_med[,,i][lower_tri_flow]})))
 
 chibar_out_comp$se <- c(do.call(c, lapply(1:n_u, function(i){chibar_EH_se[,,i][lower_tri_flow]})),
                      do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Graph_se[,,i][lower_tri_flow]})),
-                     do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Full_se[,,i][lower_tri_flow]})))
+                     do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Full_se[,,i][lower_tri_flow]})),
+                     do.call(c, lapply(1:n_u, function(i){chibar_CMEVM_Inferred_Graph_se[,,i][lower_tri_flow]})))
 
 chibar_out_comp$u <- factor(chibar_out_comp$u, levels = u)
 chibar_out_comp$Method <- factor(chibar_out_comp$Method, levels = methods)
@@ -540,16 +710,25 @@ label_y <- function(labels) {
 }
 
 pdf("Images/Danube/Bootstrapped_Ouput/Chibar_Comp.pdf", height = 15, width = 15)
-ggplot(data = chibar_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected)) +
-  lims(x = c(0, 1), y = c(0, 1)) +
-  labs(x = "Empirical", y = "Theoretical", color = "Standard error", shape = "Flow-connected") +
+ggplot(data = chibar_out_comp) + geom_point(aes(x = x, y = y, col = se, shape = Connected, alpha = Connected)) +
+  lims(x = c(0.2, 1), y = c(0.2, 1)) +
+  labs(x = "Empirical", y = "Theoretical", shape = "Flow-connected", color = "Standard error") +
   geom_abline(intercept = 0, slope = 1, col = "black", linetype = "dashed", linewidth = 0.5) +
-  scale_shape_manual(values = c(16, 17)) +
+  scale_shape_manual(values = c(1, 2)) +
   scale_colour_gradient(low = "blue", high = "red",
-                        breaks = c(0, 0.04, 0.08, 0.12),
-                        guide = guide_colorbar(barwidth = 10, barheight = 0.5)) +
-  theme(legend.position = "top") +
-  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.75)) +  # Adjust the fill legend
+                        breaks = c(0.03, 0.05, 0.07, 0.09, 0.11)) +
+  scale_alpha_manual(values = c(0.75, 0.3)) +  # Set transparency: 0.3 for FALSE, 1 for TRUE
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        strip.text.y = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16)) +
+  guides(col = guide_colorbar(title.position = "left", title.vjust = 0.9,
+                              barwidth = 15),  
+         shape = guide_legend(title.position = "left"),
+         alpha = "none") +
   facet_grid(cols = vars(Method), rows = vars(u),
              labeller = labeller(u = as_labeller(label_y, default = label_parsed)))
 dev.off()
@@ -576,11 +755,52 @@ ggplot(data = eta_CMEVM_Graph_bias_plot_data, aes(x = Conditioning_Site, y = Dep
   scale_y_discrete(breaks = seq(1, d, 1)) +
   labs(x = "Condtioning Station", y = "Dependent Station", fill = "Bias", col = "Flow-connected") +
   geom_tile(linewidth = 2) + 
-  theme(panel.background = element_blank(), axis.ticks = element_blank(), legend.position = "top") +
-  guides(fill = guide_colorbar(title.position = "left", title.vjust = 0.75)) +  # Adjust the fill legend
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16)) +
+  guides(fill = guide_colorbar(title.position = "left", title.vjust = 0.9,
+                               barwidth = 15)) +  # Adjust the fill legend
   scale_colour_manual(values = c("FALSE" = "black", "TRUE" = "blue"), breaks = c("FALSE", "TRUE")) +
   scale_fill_gradient2(low = "red", mid = "white", high = "gold", midpoint = 0)
 dev.off()
+
+## Determine where the bias in the inferred graphical model - is this in the sample place?
+eta_CMEVM_Graph_bias <- eta_CMEVM_Inferred_Graph_med[,,1] - eta_boot_med[,,1]
+
+x_site <- 1:d
+y_site <- 1:d
+sites <- expand.grid(x_site, y_site)
+sites <- sites[order(sites[,1]),]
+diag(flow_connections) <- 1
+sites <- cbind(sites, as.logical(c(flow_connections)))
+
+eta_CMEVM_Graph_bias_plot_data <- as.data.frame(cbind(sites, c(eta_CMEVM_Graph_bias)))
+colnames(eta_CMEVM_Graph_bias_plot_data) <- c("Conditioning_Site", "Dependent_Site", "Connected", "Value")
+eta_CMEVM_Graph_bias_plot_data$Conditioning_Site <- factor(eta_CMEVM_Graph_bias_plot_data$Conditioning_Site, levels = 1:d)
+eta_CMEVM_Graph_bias_plot_data$Dependent_Site <- factor(eta_CMEVM_Graph_bias_plot_data$Dependent_Site, levels = 1:d)
+eta_CMEVM_Graph_bias_plot_data$Value[eta_CMEVM_Graph_bias_plot_data$Conditioning_Site == eta_CMEVM_Graph_bias_plot_data$Dependent_Site] <- 0
+
+ggplot(data = eta_CMEVM_Graph_bias_plot_data, aes(x = Conditioning_Site, y = Dependent_Site, fill = Value, col = Connected)) + 
+  scale_x_discrete(breaks = seq(1, d, 1)) + 
+  scale_y_discrete(breaks = seq(1, d, 1)) +
+  labs(x = "Condtioning Station", y = "Dependent Station", fill = "Bias", col = "Flow-connected") +
+  geom_tile(linewidth = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16)) +
+  guides(fill = guide_colorbar(title.position = "left", title.vjust = 0.9,
+                               barwidth = 15)) +  # Adjust the fill legend
+  scale_colour_manual(values = c("FALSE" = "black", "TRUE" = "blue"), breaks = c("FALSE", "TRUE")) +
+  scale_fill_gradient2(low = "red", mid = "white", high = "gold", midpoint = 0)
+
 
 ################################################################################
 
@@ -595,9 +815,9 @@ r <- sort(sample(x = 1:nrow(trivaraite_combos), size = n_combos, replace = FALSE
 tri_combos <- trivaraite_combos[r,]
 
 ## Calculate the value
-chi_multi_boot <- chi_multi_EH <- chi_multi_HT <- chi_multi_CMEVM_Graph <- chi_multi_CMEVM_Full <- array(NA, dim = c(n_combos, n_u, n_boot))
-chi_multi_boot_med <- chi_multi_EH_med <- chi_multi_HT_med <- chi_multi_CMEVM_Graph_med <- chi_multi_CMEVM_Full_med <- matrix(NA, nrow = n_combos, ncol = n_u)
-chi_multi_boot_se <- chi_multi_EH_se <- chi_multi_HT_se <- chi_multi_CMEVM_Graph_se <- chi_multi_CMEVM_Full_se <- matrix(NA, nrow = n_combos, ncol = n_u)
+chi_multi_boot <- chi_multi_EH <- chi_multi_HT <- chi_multi_CMEVM_Graph <- chi_multi_CMEVM_Full <- chi_multi_CMEVM_Inferred_Graph <- array(NA, dim = c(n_combos, n_u, n_boot))
+chi_multi_boot_med <- chi_multi_EH_med <- chi_multi_HT_med <- chi_multi_CMEVM_Graph_med <- chi_multi_CMEVM_Full_med <- chi_multi_CMEVM_Inferred_Graph_med <- matrix(NA, nrow = n_combos, ncol = n_u)
+chi_multi_boot_se <- chi_multi_EH_se <- chi_multi_HT_se <- chi_multi_CMEVM_Graph_se <- chi_multi_CMEVM_Full_se <- chi_multi_CMEVM_Inferred_Graph_se <- matrix(NA, nrow = n_combos, ncol = n_u)
 
 for(i in 1:n_combos){
   index <- tri_combos[i,]
@@ -608,6 +828,7 @@ for(i in 1:n_combos){
     chi_multi_HT[i,,k] <- chi_multi(data = X_HT[[k]]$Data_Margins[,index], u = u)
     chi_multi_CMEVM_Graph[i,,k] <- chi_multi(data = X_Three_Step_Graph[[k]]$Data_Margins[,index], u = u)
     chi_multi_CMEVM_Full[i,,k] <- chi_multi(data = X_Three_Step_Full[[k]]$Data_Margins[,index], u = u)
+    chi_multi_CMEVM_Inferred_Graph[i,,k] <- chi_multi(data = X_Three_Step_Inferred_Graph[[k]]$Data_Margins[,index], u = u)
   }
   
   ## Get the median estimates over the 200 samples
@@ -616,6 +837,7 @@ for(i in 1:n_combos){
   chi_multi_HT_med[i,] <- apply(chi_multi_HT[i,,], 1, quantile, 0.5)
   chi_multi_CMEVM_Graph_med[i,] <- apply(chi_multi_CMEVM_Graph[i,,], 1, quantile, 0.5)
   chi_multi_CMEVM_Full_med[i,] <- apply(chi_multi_CMEVM_Full[i,,], 1, quantile, 0.5)
+  chi_multi_CMEVM_Inferred_Graph_med[i,] <- apply(chi_multi_CMEVM_Inferred_Graph[i,,], 1, quantile, 0.5)
   
   ## Get the standard error over the samples
   chi_multi_boot_se[i,] <- apply(chi_multi_boot[i,,], 1, sd)
@@ -623,17 +845,18 @@ for(i in 1:n_combos){
   chi_multi_HT_se[i,] <- apply(chi_multi_HT[i,,], 1, sd)
   chi_multi_CMEVM_Graph_se[i,] <- apply(chi_multi_CMEVM_Graph[i,,], 1, sd)
   chi_multi_CMEVM_Full_se[i,] <- apply(chi_multi_CMEVM_Full[i,,], 1, sd)
+  chi_multi_CMEVM_Inferred_Graph_se[i,] <- apply(chi_multi_CMEVM_Inferred_Graph[i,,], 1, sd)
 }
 
 
 ## plot the output
-methods <- c("Engelke & Hitz", "Three-step - Graphical", "Three-step - Saturated")
+methods <- c("Engelke & Hitz", "Three-step - Graphical", "Three-step - Saturated", "Three-step - Graphical (Inferred)")
 n_methods <- length(methods)
 
 ## eta plot
 chi_multi_comp <- data.frame(x = rep(c(chi_multi_boot_med), n_methods))
-chi_multi_comp$y <- c(c(chi_multi_EH_med), c(chi_multi_CMEVM_Graph_med), c(chi_multi_CMEVM_Full_med))
-chi_multi_comp$se <- c(c(chi_multi_EH_se), c(chi_multi_CMEVM_Graph_se), c(chi_multi_CMEVM_Full_se))
+chi_multi_comp$y <- c(c(chi_multi_EH_med), c(chi_multi_CMEVM_Graph_med), c(chi_multi_CMEVM_Full_med), c(chi_multi_CMEVM_Inferred_Graph_med))
+chi_multi_comp$se <- c(c(chi_multi_EH_se), c(chi_multi_CMEVM_Graph_se), c(chi_multi_CMEVM_Full_se), c(chi_multi_CMEVM_Inferred_Graph_se))
 chi_multi_comp$u <- rep(rep(u, each = n_combos), n_methods)
 chi_multi_comp$Method <- rep(methods, each = n_combos*n_u)
 
@@ -651,18 +874,20 @@ ggplot(data = chi_multi_comp) + geom_point(aes(x = x, y = y, col = se)) +
   lims(x = c(0, 1), y = c(0, 1)) +
   labs(x = "Empirical", y = "Theoretical", color = "Standard error") +
   geom_abline(intercept = 0, slope = 1, col = "black", linetype = "dashed", linewidth = 0.5) +
-  scale_shape_manual(values = c(16, 17)) +
-  scale_colour_gradient(low = "blue", high = "red",
-                        breaks = c(0.04, 0.06, 0.08, 0.1)) +
-  theme(legend.position = "top") +
+  scale_colour_gradient(low = "blue", high = "red", breaks = c(0.04, 0.06, 0.08)) +
+  theme(legend.position = "top",
+        legend.title = element_text(size = 16), 
+        legend.text = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        strip.text.y = element_text(size = 12),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 16)) +
   guides(col = guide_colorbar(title.position = "left",
-                              title.vjust = 1,
-                              barwidth = 10,
-                              barheight = 0.5,
+                              title.vjust = 0.9,
+                              barwidth = 15,
                               direction = "horizontal"
   )) +
   facet_grid(cols = vars(Method), rows = vars(u),
              labeller = labeller(u = as_labeller(label_y, default = label_parsed)))
 dev.off()
-
 ################################################################################
