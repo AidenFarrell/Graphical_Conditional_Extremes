@@ -163,8 +163,10 @@ fit_HT <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = NA,
                            cond = i,
+                           start = c(0.5, 0.1),
                            v = v,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -181,7 +183,7 @@ loc_start_One_Step <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
           matrix(Y_Yi_large[[j]][[k]][,j]^0.1, nrow = nrow(Y_Yi_large[[j]][[k]]), ncol = d-1), 2, mean)
 })})
 start_par_One_Step <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
-  cbind(rep(0.1, d-1), rep(0.1, d-1), loc_start_One_Step[[j]][[k]],
+  cbind(rep(0.5, d-1), rep(0.1, d-1), loc_start_One_Step[[j]][[k]],
         rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))})})
 
 ## Graphical
@@ -192,7 +194,7 @@ fit_One_Step_Graph <- lapply(1:d, function(i){
            MoreArgs = list(graph = graph_full,
                            cond = i,
                            maxit = 1e+9,
-                           nOptim = 2),
+                           nOptim = 1),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -202,6 +204,7 @@ fit_Two_Step_Graph <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
+                           start_HT = c(0.5, 0.1),
                            v = v,
                            maxit = 1e+9,
                            nOptim = 2),
@@ -215,8 +218,10 @@ fit_Three_Step_Indep <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = NA,
                            cond = i,
+                           start_HT = c(0.5, 0.1),
                            v = v,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -226,8 +231,10 @@ fit_Three_Step_Graph <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
+                           start_HT = c(0.5, 0.1),
                            v = v,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -237,8 +244,10 @@ fit_Three_Step_Full <- lapply(1:d, function(i){
            data = Y_Yi_large[[i]],
            MoreArgs = list(graph = make_full_graph(n = d),
                            cond = i,
+                           start_HT = c(0.5, 0.1),
                            v = v,
-                           maxit = 1e+9),
+                           maxit = 1e+9,
+                           nOptim = 2),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -665,7 +674,7 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 10*n_data, q = dqu),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -673,7 +682,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -681,7 +690,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -689,7 +698,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -697,7 +706,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -705,7 +714,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 10*n_data, q = dqu),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -717,9 +726,7 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.95
-u_X <- apply(X_prob_calc, 2, quantile, q_X)
-u_X <- rep(2.1, d)
+u_X <- rep(2.75, d)
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
@@ -847,7 +854,6 @@ for(i in 1:d){
   RMSE_Winner[as.numeric(names(table(RMSE_min[,i]))), i] <- table(RMSE_min[,i])
 }
 RMSE_Winner$Total <- rowSums(RMSE_Winner)
-RMSE_Winner
 
 ## Bias
 Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
@@ -862,7 +868,45 @@ for(i in 1:d){
   Bias_Winner[as.numeric(names(table(Bias_min[,i]))), i] <- table(Bias_min[,i])
 }
 Bias_Winner$Total <- rowSums(Bias_Winner)
+
+## Output
 Bias_Winner
+RMSE_Winner
+
+## Only consider the EHM, CMEVM, and three-step SCMEVM with graphical covariance structure
+index <- c(2, 3, 7)
+
+## RMSE
+RMSE_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(index, function(k){
+    RMSE(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+RMSE_min <- sapply(RMSE_out, function(x){apply(x, 1, which.min)})
+
+RMSE_Winner <- data.frame(matrix(0, ncol = d, nrow = length(index)))
+rownames(RMSE_Winner) <- method_vec[index]
+for(i in 1:d){
+  RMSE_Winner[as.numeric(names(table(RMSE_min[,i]))), i] <- table(RMSE_min[,i])
+}
+RMSE_Winner$Total <- rowSums(RMSE_Winner)
+
+## Bias
+Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(index, function(k){
+    Bias(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+Bias_min <- sapply(Bias_out, function(x){apply(x, 1, which.min)})
+
+Bias_Winner <- data.frame(matrix(0, ncol = d, nrow = length(index)))
+rownames(Bias_Winner) <- method_vec[index]
+for(i in 1:d){
+  Bias_Winner[as.numeric(names(table(Bias_min[,i]))), i] <- table(Bias_min[,i])
+}
+Bias_Winner$Total <- rowSums(Bias_Winner)
+
+## Output
+Bias_Winner
+RMSE_Winner
 
 ################################################################################
 ## Get a conditional survival curve for all the univariate probabilities
@@ -1056,76 +1100,6 @@ for(i in 1:d){
     )
   print(p)
   dev.off()
-}
-
-################################################################################
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
-k <- sample(1:n_sim, 1)
-for(i in 1:d){
-  for(j in 1:d){
-    y_low <- min(X[[k]][,c(i,j)],
-                 X_EH_Original_Margins[[k]][,c(i,j)],
-                 X_HT[[k]]$Data_Margins[,c(i,j)],
-                 X_Three_Step_Graph[[k]]$Data_Margins[,c(i,j)])
-    
-    y_high <- max(X[[k]][,c(i,j)],
-                  X_EH_Original_Margins[[k]][,c(i,j)],
-                  X_HT[[k]]$Data_Margins[,c(i,j)],
-                  X_Three_Step_Graph[[k]]$Data_Margins[,c(i,j)])
-    
-    plot(X[[k]][,i], X[[k]][,j], pch = 19,
-         xlab = substitute(X[i], list(i = i)),
-         ylab = substitute(X[j], list(j = j)),
-         xlim = c(y_low, y_high), ylim = c(y_low, y_high))
-    
-    # points(X_EH_Original_Margins[[k]][,i], X_EH_Original_Margins[[k]][,j],
-    #        col = alpha(col = "blue", alpha = 0.4))
-    
-    points(X_HT[[k]]$Data_Margins[,i], X_HT[[k]]$Data_Margins[,j],
-           col = alpha(col = "yellow", alpha = 0.5))
-    
-    points(X_Three_Step_Graph[[k]]$Data_Margins[,i], X_Three_Step_Graph[[k]]$Data_Margins[,j],
-           col = alpha(col = "red", alpha = 0.3))
-    
-  }
-}
-
-k <- sample(1:n_sim, 1)
-par(mfrow = c(d, d), mgp = c(2.3, 1,0), mar = c(5, 4, 4, 2) + 0.1)
-for(i in 1:d){
-  for(j in 1:d){
-    if(i == j){
-      plot(1, type="n", xlab="", ylab="", xaxt = 'n', yaxt = 'n')
-    }
-    else if(j < i){
-      res <- fit_Three_Step_Graph[[i]][[k]]$Z[,j]
-      dens_res <- density(res)
-      dens_res_theo <- dagg(x = dens_res$x,
-                            loc = fit_Three_Step_Graph[[i]][[k]]$par$main[3,j],
-                            scale_1 = fit_Three_Step_Graph[[i]][[k]]$par$main[4,j],
-                            scale_2 = fit_Three_Step_Graph[[i]][[k]]$par$main[5,j],
-                            shape = fit_Three_Step_Graph[[i]][[k]]$par$main[6,j])
-      
-      plot(x = dens_res$x, y = dens_res$y, type = "l", lwd = 4,
-           ylim = c(0, max(dens_res$y, dens_res_theo)),
-           xlab = "z", ylab = "Density", main = substitute(Z[j ~ "|" ~ i], list(i = i, j = j)))
-      lines(x = dens_res$x, y = dens_res_theo, col = "red", lwd = 2)
-    }
-    else{
-      res <- fit_Three_Step_Graph[[i]][[k]]$Z[,j-1]
-      dens_res <- density(res)
-      dens_res_theo <- dagg(x = dens_res$x,
-                            loc = fit_Three_Step_Graph[[i]][[k]]$par$main[3,j-1],
-                            scale_1 = fit_Three_Step_Graph[[i]][[k]]$par$main[4,j-1],
-                            scale_2 = fit_Three_Step_Graph[[i]][[k]]$par$main[5,j-1],
-                            shape = fit_Three_Step_Graph[[i]][[k]]$par$main[6,j-1])
-      
-      plot(x = dens_res$x, y = dens_res$y, type = "l", lwd = 4,
-           ylim = c(0, max(dens_res$y, dens_res_theo)),
-           xlab = "z", ylab = "Density", main = substitute(Z[j ~ "|" ~ i], list(i = i, j = j)))
-      lines(x = dens_res$x, y = dens_res_theo, col = "red", lwd = 2)
-    }
-  }
 }
 
 ################################################################################
