@@ -37,7 +37,7 @@ Cond_Extremes_MVN <- function(data, cond, graph = NA,
     stop("Initial starting values are outside the parameter sapce")
   }
   if(length(start) == 2){
-    start <- matrix(rep(start, d-1), ncol = 2)
+    start <- matrix(rep(start, d-1), ncol = 2, byrow = TRUE)
   }
   
   #separate data into the conditioning and unconditioned random variables
@@ -270,24 +270,18 @@ qfun_MVN_indep <- function(yex, ydep, constrain, q, v, aLow, maxit, start, nOpti
   n <- length(yex)
   
   if(nOptim > 1){
-    if(inherits(fit, "try-error")){
-      next()
-    }
-    else if(fit$convergence != 0 | fit$value == 1e+10){
-      next()
-    }
-    else{
-      for(i in 2:nOptim){
+    for(i in 2:nOptim){
+      if(inherits(fit, "try-error")){
+        break()
+      }
+      else if(fit$convergence != 0 | fit$value == 1e+10){
+        break()
+      }
+      else{
         fit <- try(optim(par = fit$par, fn = Qpos, control = list(maxit = maxit),
                          yex = yex, ydep = ydep, negative = TRUE,
                          constrain = constrain, aLow = aLow, v = v, q = q, method = "BFGS"),
                    silent = TRUE)
-        if(inherits(fit, "try-error")){
-          break()
-        }
-        else if(fit$convergence != 0 | fit$value == 1e+10){
-          break()
-        }
       } 
     }
   }
