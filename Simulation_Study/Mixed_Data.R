@@ -808,7 +808,7 @@ method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
                 "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 method_vec_1 <- method_vec[-1]
-for(i in 1:3){
+for(i in 1:d){
   for(j in 1:length(uncon[[1]])){
     ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
     ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
