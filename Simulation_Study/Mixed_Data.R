@@ -808,7 +808,7 @@ method_vec <- c("True", "Engelke & Hitz", "Heffernan & Tawn",
                 "One-step - Graphical", "Two-step - Graphical",
                 "Three-step - Independence", "Three-step - Graphical", "Three-step - Saturated")
 method_vec_1 <- method_vec[-1]
-for(i in 1:d){
+for(i in 1:3){
   for(j in 1:length(uncon[[1]])){
     ymin = floor(min(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
     ymax = ceiling(max(p_comp[[i]][[j]][,-1] - p_comp[[i]][[j]][,1])/0.1)*0.1
@@ -820,7 +820,6 @@ for(i in 1:d){
     pdf(paste0("Images/Simulation_Study/Mixed_Data/Probabilities/Site_", i, "/Prob_", j, ".pdf"), height = 10, width = 10)
     par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
     p_plot <- ggplot() + geom_boxplot(data = data_to_plot, aes(y = Value, fill = Model)) +
-      lims(y = c(ymin, max(0.4, ymax))) +
       labs(y = "Bias", title = plot_titles[[i]][[j]]) +
       theme(legend.position = c(.95, .95),
             legend.justification = c("right", "top"),
@@ -834,6 +833,12 @@ for(i in 1:d){
             axis.text.x = element_blank(), 
             axis.ticks.x = element_blank()) +
       geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
+    if(i == 4 | i == 5){
+      p_plot <- p_plot + lims(y = c(ymin, max(0.3, ymax)))
+    }
+    else{
+      p_plot <- p_plot + lims(y = c(ymin, max(1, ymax)))
+    }
     print(p_plot)
     dev.off()
   }
