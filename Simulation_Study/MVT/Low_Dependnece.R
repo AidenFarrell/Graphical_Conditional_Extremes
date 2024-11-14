@@ -557,11 +557,12 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
                         xi = shape_final[[i]][j],
                         method = "mixture")})})
 
+dqu_pred <- dqu
 ## Heffernan and Tawn model
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -569,7 +570,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -577,7 +578,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -585,7 +586,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -593,7 +594,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -601,7 +602,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 20*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 50*n_data, q = dqu_pred),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -613,9 +614,9 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-q_X <- 0.85
+q_X <- 0.8
 u_X <- apply(X_prob_calc, 2, quantile, q_X)
-u_X
+u_X <- rep(0.75, d)
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
@@ -743,9 +744,8 @@ for(i in 1:d){
   RMSE_Winner[as.numeric(names(table(RMSE_min[,i]))), i] <- table(RMSE_min[,i])
 }
 RMSE_Winner$Total <- rowSums(RMSE_Winner)
-RMSE_Winner
 
-## MAB
+## MAE
 Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
   sapply(2:length(method_vec), function(k){
     Bias(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
@@ -758,7 +758,52 @@ for(i in 1:d){
   Bias_Winner[as.numeric(names(table(Bias_min[,i]))), i] <- table(Bias_min[,i])
 }
 Bias_Winner$Total <- rowSums(Bias_Winner)
+
+RMSE_Winner
 Bias_Winner
+
+## Only consider the EHM, CMEVM, and three-step SCMEVM with graphical covariance structure
+index <- c(2, 3, 7)
+
+## RMSE
+RMSE_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(index, function(k){
+    RMSE(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+RMSE_min <- sapply(RMSE_out, function(x){apply(x, 1, which.min)})
+
+RMSE_Winner <- data.frame(matrix(0, ncol = d, nrow = length(index)))
+rownames(RMSE_Winner) <- method_vec[index]
+for(i in 1:d){
+  RMSE_Winner[as.numeric(names(table(RMSE_min[,i]))), i] <- table(RMSE_min[,i])
+}
+RMSE_Winner$Total <- rowSums(RMSE_Winner)
+
+## Bias
+Bias_out <- lapply(1:d, function(i){t(sapply(1:length(uncon[[1]]), function(j){
+  sapply(index, function(k){
+    Bias(p_comp[[i]][[j]][,k], p_comp[[i]][[j]][,1])})}))})
+
+Bias_min <- sapply(Bias_out, function(x){apply(x, 1, which.min)})
+
+Bias_Winner <- data.frame(matrix(0, ncol = d, nrow = length(index)))
+rownames(Bias_Winner) <- method_vec[index]
+for(i in 1:d){
+  Bias_Winner[as.numeric(names(table(Bias_min[,i]))), i] <- table(Bias_min[,i])
+}
+Bias_Winner$Total <- rowSums(Bias_Winner)
+
+## Output
+Bias_Winner
+RMSE_Winner
+
+plot(x = do.call(rbind, Bias_out)[,2],
+     y = do.call(rbind, Bias_out)[,3],
+     pch = 19,
+     xlim = c(0, max(do.call(rbind, Bias_out)[,-1])),
+     ylim = c(0, max(do.call(rbind, Bias_out)[,-1])),
+     xlab = "CMEVM", ylab = "SCMEVM", main = "MAE")
+abline(a = 0, b = 1, col = 2)
 
 ################################################################################
 ## Get a conditional survival curve for all the univariate probabilities
@@ -801,6 +846,9 @@ u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max, by = 0.01)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = X_EH_Original_Margins, u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
+surv_HT <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
+  cond_serv_curve_model(data = lapply(X_HT, function(x){x$Data_Margins}), 
+                        u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
 surv_Three_Step <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
   cond_serv_curve_model(data = lapply(X_Three_Step_Graph, function(x){x$Data_Margins}), 
                         u_cond = u_X[i], u_dep = u_dep[[j]], cond_var = i, dep_var = j)})})
@@ -809,15 +857,19 @@ surv_data <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
 
 ## get a ggplot of the bias
 ## Let us only focus on Y1 being large first
-bias_EH <- bias_Three_Step <- rep(list(vector("list", d)), d)
+bias_EH <- bias_HT <- bias_Three_Step <- rep(list(vector("list", d)), d)
 for(i in 1:d){
   for(j in 1:d){
     if(i == j){
       bias_EH[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
+      bias_HT[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
       bias_Three_Step[[i]][[j]] <- matrix(NA, nrow = length(u_dep[[j]]), ncol = n_sim)
     }
     else if(i < j){
       bias_EH[[i]][[j]] <- surv_EH[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
+                                                        nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                        byrow = FALSE)
+      bias_HT[[i]][[j]] <- surv_HT[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
                                                         nrow = length(u_dep[[j]]), ncol = n_sim,
                                                         byrow = FALSE)
       bias_Three_Step[[i]][[j]] <- surv_Three_Step[[i]][[j-1]] - matrix(surv_data[[i]][[j-1]], 
@@ -826,6 +878,9 @@ for(i in 1:d){
     }
     else{
       bias_EH[[i]][[j]] <- surv_EH[[i]][[j]] - matrix(surv_data[[i]][[j]], 
+                                                      nrow = length(u_dep[[j]]), ncol = n_sim,
+                                                      byrow = FALSE)
+      bias_HT[[i]][[j]] <- surv_HT[[i]][[j]] - matrix(surv_data[[i]][[j]], 
                                                       nrow = length(u_dep[[j]]), ncol = n_sim,
                                                       byrow = FALSE)
       bias_Three_Step[[i]][[j]] <- surv_Three_Step[[i]][[j]] - matrix(surv_data[[i]][[j]], 
@@ -838,6 +893,7 @@ for(i in 1:d){
 ## CI data
 ci <- c(0.025, 0.975)
 bias_EH_CI <- lapply(bias_EH, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
+bias_HT_CI <- lapply(bias_HT, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 bias_Three_Step_CI <- lapply(bias_Three_Step, function(x){lapply(x, function(y){t(apply(y, 1, quantile, probs = ci, na.rm = TRUE))})})
 
 ## set-up the data frame
@@ -850,7 +906,7 @@ bias_ci_df <- data.frame(x_vals = rep(rep(do.call(c, lapply(u_dep, function(x){c
                              do.call(c, lapply(x, function(y){c(y[,1], rev(y[,2]))}))}))),
                          Method = rep(methods, each = sum(sapply(u_dep, length))*2*d),
                          Conditioning_Variable = rep(rep(1:d, each = sum(sapply(u_dep, length))*2), n_methods),
-                         Dependent_Variable = rep(rep(do.call(c, sapply(1:d, function(i){rep(i, times = length(u_dep[[i]])*2)})), d), n_methods))
+                         Dependent_Variable = rep(rep(c(sapply(1:d, function(i){rep(i, times = length(u_dep[[i]])*2)})), d), n_methods))
 
 bias_ci_df$Method <- factor(bias_ci_df$Method, levels = methods)
 bias_ci_df$Conditioning_Variable <- factor(bias_ci_df$Conditioning_Variable, levels = unique(bias_ci_df$Conditioning_Variable))
@@ -896,7 +952,7 @@ ggplot(data = bias_ci_df, aes(x = x_vals, y = y_vals)) +
       Dependent_Variable = as_labeller(label_x, default = label_parsed)
     )
   )
-dev.off()
+# dev.off()
 
 ## 2 x 2 plot of the above for one conditioning variable
 for(i in 1:d){
@@ -940,3 +996,170 @@ for(i in 1:d){
 #                             mu = mu_true, Gamma = Gamma_true, graph = g_true))
 # saveRDS(out, file = "Data/MVT_Low_Dependence_D5.RData")
 ################################################################################
+## Diagnostics on the distribution in question
+m <- sample(1:n_sim, 1)
+
+## check the dependence in the data
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    plot(x = evd::qfrechet(rank(X[[m]][,i])/(1 + n_data)), 
+         y = evd::qfrechet(rank(X[[m]][,j])/(1 + n_data)),
+         pch = 19,
+         xlab = substitute(X[i], list(i = i)),
+         ylab = substitute(X[j], list(j = j)))
+  }
+}
+## Mostly AI as expected
+
+## Look at Y | Yi > u
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    plot(x = Y_Yi_large[[i]][[m]][,i], 
+         y = Y_Yi_large[[i]][[m]][,j],
+         pch = 19,
+         xlab = substitute(Y[i] ~ "|" ~ Y[i] > u[i], list(i = i)),
+         ylab = substitute(Y[j] ~ "|" ~ Y[i] > u[i], list(i = i, j = j)))
+  }
+}
+## Mostly looks AI
+
+## Look at the fitted residuals against Yi > ui (they should be independent)
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    if(i == j){
+      plot(1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+    }
+    else{
+      if(i < j){
+        k <- j - 1
+      }
+      else{
+        k <- j
+      }
+      plot(x = (rank(Y[[m]][,i])/(1 + n_data))[Y[[m]][,i] > Y_u], 
+           y = fit_HT[[i]][[m]]$Z[,k],
+           pch = 19,
+           xlab = substitute(F[i](Y[i]), list(i = i)),
+           ylab = substitute(Z[j ~ "|" ~ i], list(i = i, j = j)))
+      abline(h = c(-2, 0, 2), col = 2, lty = 2, lwd = 2)
+    }
+  }
+}
+## The residuals appear independent of the conditioning component
+
+## Look at the marginal AGG fits
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    if(i == j){
+      plot(1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+    }
+    else{
+      if(i < j){
+        k <- j - 1
+      }
+      else{
+        k <- j
+      }
+      resid <- fit_Three_Step_Graph[[i]][[m]]$Z[,k]
+      resid_dens <- density(resid)
+      model_dens <- dagg(x = sort(resid),
+                         loc = fit_Three_Step_Graph[[i]][[m]]$par$main[3,k],
+                         scale_1 = fit_Three_Step_Graph[[i]][[m]]$par$main[4,k],
+                         scale_2 = fit_Three_Step_Graph[[i]][[m]]$par$main[5,k],
+                         shape = fit_Three_Step_Graph[[i]][[m]]$par$main[6,k])
+      
+      plot(resid_dens, ylim = c(0, max(resid_dens$y, model_dens)))
+      lines(x = sort(resid), y = model_dens,
+            col = 2, lty = 2, lwd = 2)
+    }
+  }
+}
+## model fits look good
+
+## We can also look at QQ-plots
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    if(i == j){
+      plot(1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+    }
+    else{
+      if(i < j){
+        k <- j - 1
+      }
+      else{
+        k <- j
+      }
+      resid <- fit_Three_Step_Graph[[i]][[m]]$Z[,k]
+      resid_unif <- rank(resid)/(1 + length(resid))
+      model_q <- qagg(p = resid_unif,
+                         loc = fit_Three_Step_Graph[[i]][[m]]$par$main[3,k],
+                         scale_1 = fit_Three_Step_Graph[[i]][[m]]$par$main[4,k],
+                         scale_2 = fit_Three_Step_Graph[[i]][[m]]$par$main[5,k],
+                         shape = fit_Three_Step_Graph[[i]][[m]]$par$main[6,k])
+      
+      plot(x = resid, y = model_q, pch = 19,
+           xlab = "Empirical", ylab = "Theoretical",
+           xlim = c(min(resid, model_q), max(resid, model_q)),
+           ylim = c(min(resid, model_q), max(resid, model_q)))
+      abline(a = 0, b = 1, col = 2, lty = 2)
+    }
+  }
+}
+## QQ-plots look great
+
+## Little difference in the fitted precision matrices for the three-step models
+## Check simulations
+par(mfrow = c(d, d))
+for(i in 1:d){
+  for(j in 1:d){
+    plot(x = X[[m]][,i], y = X[[m]][,j],
+         xlab = substitute(X[i], list(i = i)),
+         ylab = substitute(X[j], list(j = j)))
+    
+    points(x = X_HT[[m]]$Data_Margins[,i],
+           y = X_HT[[m]]$Data_Margins[,j],
+           col = alpha(colour = "red", alpha = 0.8))
+    
+    points(x = X_Three_Step_Graph[[m]]$Data_Margins[,i],
+           y = X_Three_Step_Graph[[m]]$Data_Margins[,j],
+           col = alpha(colour = "blue", alpha = 0.8))
+  }
+}
+## Seems to be little difference in the simulated data sets and the true underlying data
+
+################################################################################
+## Using On the extremal dependence coefficient of multivariate distributions, Gabriel Frahm 2006
+## To calculate the extremal dependence coefficient (and thereby chi) for ths example
+dispersion_matrix
+sigma_matrix <- diag(sqrt(diag(dispersion_matrix)))
+corr_matix <- matrix(0, d, d)
+for(i in 1:d){
+  for(j in 1:d){
+    corr_matix[i,j] <- dispersion_matrix[i,j]/(sigma_matrix[i,i]*sigma_matrix[j,j])
+  }
+}
+
+corr_matrix_i <- lapply(1:d, function(i){corr_matix[-i,-i]})
+
+P_i <- lapply(1:d, function(i){
+  corr_matrix_i[[i]] - matrix(corr_matix[-i,i], ncol = 1)%*%matrix(corr_matix[i,-i], nrow = 1)})
+
+upper_lims <- lapply(1:d, function(i){
+  c(sqrt(df + 1)*(solve(P_i[[i]])%*%(1 - corr_matix[i,-i])))
+})
+
+## Theorem 10
+epsilon <- sum(sapply(upper_lims, function(x){mvtnorm::pmvt(lower = -Inf, upper = -x, df = df + 1)}))
+epsilon <- epsilon/sum(sapply(upper_lims, function(x){mvtnorm::pmvt(lower = -Inf, upper = x, df = df + 1)}))
+epsilon
+
+## Proposition 1
+lambda <- 2*(epsilon/(1 + epsilon))
+lambda
+
+## The data is AI and is almost exactly independent!
