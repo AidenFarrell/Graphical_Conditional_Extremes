@@ -837,7 +837,7 @@ for(i in 1:d){
       p_plot <- p_plot + lims(y = c(ymin, max(0.3, ymax)))
     }
     else{
-      p_plot <- p_plot + lims(y = c(ymin, max(1, ymax)))
+      p_plot <- p_plot + lims(y = c(min(-0.6, ymin), max(1, ymax)))
     }
     print(p_plot)
     dev.off()
