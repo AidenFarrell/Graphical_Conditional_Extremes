@@ -36,7 +36,7 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
   if(!is.numeric(n_sim) | length(n_sim) != 1 | n_sim%%1 != 0 | n_sim <= n){
     stop("n_sim must be a single positive integer greater than n (the number of data points)")
   }
-  if(!is.numeric(q) | length(q) != 1 | n_sim%%1 != 0 | n_sim <= n){
+  if(!is.numeric(q) | length(q) != 1){
     stop("q must be a single positive real number in the range(0, 1)") 
   }
   else if(any(q <= 0) | any(q >= 1)){
@@ -148,7 +148,7 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
   if(!is.numeric(n_sim) | length(n_sim) != 1 | n_sim%%1 != 0 | n_sim <= n){
     stop("n_sim must be a single positive integer greater than n (the number of data points)")
   }
-  if(!is.numeric(q) | length(q) != 1 | n_sim%%1 != 0 | n_sim <= n){
+  if(!is.numeric(q) | length(q) != 1){
     stop("q must be a single positive real number in the range(0, 1)") 
   }
   else if(any(q <= 0) | any(q >= 1)){
