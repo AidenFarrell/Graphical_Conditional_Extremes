@@ -1,9 +1,3 @@
----
-output: html_document
-bibliography: Library.bib  
----
-
-
 # **Graphical_Conditional_Extremes**
 
 The repository contains R code used to model data according to the methods in the preprint “Conditional Extremes With Graphical Models” (Farrell, Eastoe, and Lee (2024)). Additionally, output (figures and tables) has been saved in the repository.
