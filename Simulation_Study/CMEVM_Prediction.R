@@ -7,7 +7,6 @@ t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
 ## Load in Rs script with functions for fitting the conditional extremes model with
-setwd("/home/farrel11/Graphical_Models/")
 
 ## General functions
 source("Miscellaneous_Functions/General_Functions.R")
@@ -512,7 +511,7 @@ rho_true <- cov2cor(Sigma_true)
 n_boot <- 200
 dqu <- 0.8
 n_excesses <- 250
-n_model_sim <- 1e+7
+n_model_sim <- 5e+6
 
 ## Choose the site we wish to condition on
 cond_site <- sample(1:d, size = 1)
@@ -541,6 +540,21 @@ tri_combos <- combinations(n = d-1, r = 3, v = (1:d)[-cond_site])
 tri_combos <- tri_combos[sample(1:nrow(tri_combos), n_combos),]
 tri_combos <- lapply(seq_len(n_combos), function(i){tri_combos[i,]})
 
+## Obtain the probabilities from the model
+p_model <- vector("list", n_boot)
+for(i in 1:n_boot){
+  p_model[[i]] <- Prob_Comp_Function(par = par_true,
+                                               n_excesses = n_excesses,
+                                               dqu = dqu,
+                                               cond_site = cond_site,
+                                               graph = g_true,
+                                               n_model_sim = n_model_sim,
+                                               uncon_sites = tri_combos,
+                                               u = u)
+  print(paste(i, "samples of", n_boot, "complete"))
+}
+
+## Obtain probability from the true distribution
 ## Simulate one very large sample from the true distribution for "true" probabilities
 Y_Yi_large_true <- 
   Y_from_MVAGG(n_data = 1e+7,
@@ -562,20 +576,6 @@ p_true <- mcmapply(FUN = surv_prob,
                                    con = cond_site),
                    SIMPLIFY = TRUE,
                    mc.cores = detectCores() - 1)
-
-## Now get the probabilities from the model
-p_model <- vector("list", d)
-for(i in 1:n_boot){
-  p_model[[i]] <- Prob_Comp_Function(par = par_true,
-                                               n_excesses = n_excesses,
-                                               dqu = dqu,
-                                               cond_site = cond_site,
-                                               graph = g_true,
-                                               n_model_sim = n_model_sim,
-                                               uncon_sites = tri_combos,
-                                               u = u)
-  print(paste(i, "samples of", n_boot, "complete"))
-}
 
 ## Obtain MAE and RMSE metrics
 ## Look at summary statistics and plots
@@ -610,14 +610,14 @@ print(MAE_RMSE_out)
 p_comp <- data.frame(Prob_Index = rep(1:n_combos, times = n_methods),
                      Method = rep(methods, each = n_combos),
                      True_Prob = rep(p_true, n_methods),
-                     Model_Prob = c(apply(p_CMEVM, 1, median),
-                                    apply(p_SCMEVM_Graph, 1, median),
-                                    apply(p_SCMEVM_Full, 1, median)),
+                     Model_Prob = c(apply(p_CMEVM, 1, quantile, probs = 0.5),
+                                    apply(p_SCMEVM_Graph, 1, quantile, probs = 0.5),
+                                    apply(p_SCMEVM_Full, 1, quantile, probs = 0.5)),
                      Model_SE = c(apply(p_CMEVM, 1, sd),
                                   apply(p_SCMEVM_Graph, 1, sd),
                                   apply(p_SCMEVM_Full, 1, sd)))
 
-pdf("/home/farrel11/Graphical_Models/Images/Prob_Comp.pdf", height = 15, width = 15)
+pdf("/home/farrel11/Graphical_Models/Images/Prob_Comp.pdf", height = 10, width = 10)
 ggplot(data = p_comp, aes(x = exp(True_Prob), y = exp(Model_Prob), col = Model_SE)) +
   geom_point() +
   scale_colour_gradient(low = "blue", high = "red") +
@@ -626,12 +626,12 @@ ggplot(data = p_comp, aes(x = exp(True_Prob), y = exp(Model_Prob), col = Model_S
        col = "Model SE",
        title = substitute(P(Y[A] > v ~ "|" ~ Y[i] > v))) +
   theme(legend.position = "right",
-        legend.title = element_text(size = 16), 
+        legend.title = element_text(size = 12), 
         legend.text = element_text(size = 12),
         strip.text.x = element_text(size = 12),
         strip.text.y = element_text(size = 12),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 8),
+        axis.title = element_text(size = 12),
         title = element_text(size = 16)) +
   geom_abline(intercept = 0, slope = 1, col = "black", linetype = "dashed", linewidth = 1) +
   facet_wrap(~ Method, ncol = n_methods)
@@ -644,13 +644,13 @@ plot_out <- Scatter_Plot_Comp_Function(par = par_true,
                                        dqu = dqu,
                                        cond_site = cond_site,
                                        graph = g_true,
-                                       n_model_sim = 1e+4)
+                                       n_model_sim = n_model_sim)
 
-pdf("/home/farrel11/Graphical_Models/Images/Sample_Clouds_Cond_Site.pdf", height = 15, width = 15)
+pdf("/home/farrel11/Graphical_Models/Images/Sample_Clouds_Cond_Site.pdf", height = 10, width = 10)
 print(plot_out[[1]])
 dev.off()
 
-pdf("/home/farrel11/Graphical_Models/Images/Sample_Clouds_Cond_Not_Site.pdf", height = 15, width = 15)
+pdf("/home/farrel11/Graphical_Models/Images/Sample_Clouds_Not_Cond_Site.pdf", height = 10, width = 10)
 print(plot_out[[2]])
 dev.off()
 ## Shows the rays in the simualted data from the fitted model using the Heffernan
