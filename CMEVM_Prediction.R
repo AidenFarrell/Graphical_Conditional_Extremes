@@ -7,7 +7,6 @@ t(t(sapply(required_pckgs, require, character.only = TRUE)))
 
 ################################################################################
 ## Load in Rs script with functions for fitting the conditional extremes model with
-# setwd("/home/farrel11/Graphical_Models/")
 
 ## General functions
 source("Miscellaneous_Functions/General_Functions.R")
