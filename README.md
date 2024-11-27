@@ -87,7 +87,7 @@ Below is a summary table that details the file used to obtain the output and a l
 
 # **References**
 
-[1] Farrell, A., Eastoe, E. F., and Lee, C. (2024). Conditional extremes with graphical models. arXiv preprint arXiv:2411.17013. [https://arxiv.org/abs/2411.17013](https://arxiv.org/abs/2411.17013)
+[1] FARRELL, A., EASTOE, E. F., and LEE, C. (2024). Conditional extremes with graphical models. arXiv preprint arXiv:2411.17013. [https://arxiv.org/abs/2411.17013](https://arxiv.org/abs/2411.17013)
 
 [2] MURPHY, C., TAWN, J. A. and VARTY, Z. (2024). Automated threshold selection and associated inference uncertainty for univariate extremes. Technometrics 0 1–17. [https://doi.org/10.1080/00401706.2024.2421744](https://doi.org/10.1080/00401706.2024.2421744)
 
