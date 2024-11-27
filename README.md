@@ -1,6 +1,6 @@
 # **Graphical_Conditional_Extremes**
 
-The repository contains R code used to model data according to the methods in the preprint “Conditional Extremes With Graphical Models” (Farrell, Eastoe, and Lee (2024)). Additionally, output (figures and tables) has been saved in the repository.
+The repository contains R code used to model data inline with the methods presented in the preprint “Conditional Extremes With Graphical Models” [1]. Additionally, output (figures and tables) has been saved in the repository.
 
 ## **Dependencies**
 
@@ -12,18 +12,18 @@ The repository is rather large. Below, we detail the contents of each folder.
 
 ### `/threshold_selection_paper`
 
-This folder contains files related to threshold selection [1]. These files can also be found [here](https://github.com/conor-murphy4/automated_threshold_selection/tree/main/src).
+This folder contains files related to threshold selection [2]. These files can also be found [here](https://github.com/conor-murphy4/automated_threshold_selection/tree/main/src).
 
 ### `/Miscellaneous_Functions`
 
 - `General_Functions.R` includes commonly used functions: calculating the conditional covariance matrix for a multivariate Gaussian distribution; adding NAs into vectors and matrices; and calculating the mean absolute error and root mean squared error of samples.
 - `Plotting_Functions.R` includes functions to create boxplots of parameter estimates.
-- `MVAGG_Functions.R` includes the probability density function, cumulative distribution function, quantile functions, and random generation for the asymmetric generalised Gaussian (AGG) distribution [2]. Functions to fit the AGG distribution to data are also provided. Additionally, functions for the density and random number generation of the multivariate asymmetric generalised Gaussian (MVAGG) distribution are included. Details can be found in Section 2.2 of the paper.
+- `MVAGG_Functions.R` includes the probability density function, cumulative distribution function, quantile functions, and random generation for the asymmetric generalised Gaussian (AGG) distribution [3]. Functions to fit the AGG distribution to data are also provided. Additionally, functions for the density and random number generation of the multivariate asymmetric generalised Gaussian (MVAGG) distribution are included. Details can be found in Section 2.2 of the paper.
 - `Transformations.R` includes functions to marginally transform data onto standard Laplace margins using the semi-parametric approach described in Section 3.1 of the paper.
 
 ### `/Model_Fitting`
 
-This folder contains functions for fitting the conditional multivariate extreme value model (CMEVM) [3] and the structured CMEVM (SCMEVM) described in Section 3.1 of the paper. 
+This folder contains functions for fitting the conditional multivariate extreme value model (CMEVM) [4] and the structured CMEVM (SCMEVM) described in Section 3.1 of the paper. 
 
 - `Cond_Extremes_MVN_Residuals.R` extends the CMEVM to allow the residual distribution to be a multivariate Gaussian distribution with independent, graphical, or saturated covariance structures.
 - `Cond_Extremes_MVAGG_Residuals_One_Step.R`, `Cond_Extremes_MVAGG_Residuals_Two_Step.R`, and `Cond_Extremes_MVAGG_Residuals_Three_Step.R` contain code to fit the SCMEVM with independent, graphical, or saturated covariance structures for the one-, two-, and three-step methods, respectively.
@@ -45,7 +45,7 @@ This folder contains all the scripts used to perform the simulation studies in S
 
 - `/True_Distribution`: Contains simulation studies when data is simulated from the true distribution. Details can be found in Section 4.1 of the paper and Section 2 of the supplementary material.
 - `/Timing`: Contains scripts for timing comparisons of the stepwise SCMEVMs in Section 4.1 of the paper.
-- `Mixed_Data.R`: Contains a simulation study comparing the CMEVM, SCMEVMs, and the Engelke and Hitz model [4] for data generated from a mixture distribution with various extremal behaviours. Details are in Section 4.3 of the paper.
+- `Mixed_Data.R`: Contains a simulation study comparing the CMEVM, SCMEVMs, and the Engelke and Hitz model [5] for data generated from a mixture distribution with various extremal behaviours. Details are in Section 4.3 of the paper.
 - `CMEVM_Prediction.R`: Contains a simulation study comparing the predictive performance of the CMEVM and the three-step SCMEVM with graphical and saturated covariance structures. Details are in Section 1 of the supplementary material.
 - `/MVN`: Contains simulation studies for data simulated from a multivariate Gaussian distribution. Details can be found in Section 3.1 of the supplementary material.
 - `/MVL`: Contains simulation studies for data simulated from a symmetric multivariate Laplace distribution. Details can be found in Section 3.2 of the supplementary material.
@@ -58,7 +58,7 @@ This folder contains the data, on their original and standard Laplace margins, u
 
 ### `/Danube_River`
 
-This folder contains files related to the analysis of extreme river discharges in the upper Danube River basin [5].
+This folder contains files related to the analysis of extreme river discharges in the upper Danube River basin [6].
 
 - `Danube_EDA.R`: Performs exploratory data analysis.
 - `Danube_Model_Comparison_Bootstrapped.R`: Includes all other analyses on the data, such as bootstrapping the data, inferring the graph using the bootstrapped samples, fitting various models to the data, and creating comparative plots of the predictive performance of the models.
@@ -87,13 +87,15 @@ Below is a summary table that details the file used to obtain the output and a l
 
 # **References**
 
-[1] MURPHY, C., TAWN, J. A. and VARTY, Z. (2024). Automated threshold selection and associated inference uncertainty for univariate extremes. Technometrics 0 1–17. [https://doi.org/10.1080/00401706.2024.2421744](https://doi.org/10.1080/00401706.2024.2421744)
+[1] Farrell, A., Eastoe, E. F., and Lee, C. (2024). Conditional extremes with graphical models. arXiv preprint arXiv:2411.17013. [https://arxiv.org/abs/2411.17013](https://arxiv.org/abs/2411.17013)
 
-[2] NACEREDDINE, N. and GOUMEIDANE, A. B. (2019). Asymmetric Generalized Gaussian Distribution Parameters Estimation based on Maximum Likelihood, Moments and Entropy. In 2019 IEEE 15th International Conference on Intelligent Computer Communication and Processing (ICCP) 343-350. [https://doi.org/10.1109/ICCP48234.2019.8959693](https://doi.org/10.1109/ICCP48234.2019.8959693)
+[2] MURPHY, C., TAWN, J. A. and VARTY, Z. (2024). Automated threshold selection and associated inference uncertainty for univariate extremes. Technometrics 0 1–17. [https://doi.org/10.1080/00401706.2024.2421744](https://doi.org/10.1080/00401706.2024.2421744)
 
-[3] HEFFERNAN, J. E. and TAWN, J. A. (2004). A conditional approach for multivariate extreme values (with discussion). Journal of the Royal Statistical Society: Series B (Statistical Methodology) 66 497-546. [https://doi.org/10.1111/j.1467-9868.2004.02050.x](https://doi.org/10.1111/j.1467-9868.2004.02050.x)
+[3] NACEREDDINE, N. and GOUMEIDANE, A. B. (2019). Asymmetric Generalized Gaussian Distribution Parameters Estimation based on Maximum Likelihood, Moments and Entropy. In 2019 IEEE 15th International Conference on Intelligent Computer Communication and Processing (ICCP) 343-350. [https://doi.org/10.1109/ICCP48234.2019.8959693](https://doi.org/10.1109/ICCP48234.2019.8959693)
 
-[4] ENGELKE, S. and HITZ, A. S. (2020). Graphical models for extremes. Journal of the Royal Statistical Society: Series B (Statistical Methodology) 82 871-932. [https://doi.org/10.1111/rssb.12355](https://doi.org/10.1111/rssb.12355)
+[4] HEFFERNAN, J. E. and TAWN, J. A. (2004). A conditional approach for multivariate extreme values (with discussion). Journal of the Royal Statistical Society: Series B (Statistical Methodology) 66 497-546. [https://doi.org/10.1111/j.1467-9868.2004.02050.x](https://doi.org/10.1111/j.1467-9868.2004.02050.x)
 
-[5] ASADI, P., DAVISON, A. C. and ENGELKE, S. (2015). Extremes on river networks. The Annals of Applied Statistics 9 2023 – 2050. [https://doi.org/10.1214/15-AOAS863](https://doi.org/10.1214/15-AOAS863)
+[5] ENGELKE, S. and HITZ, A. S. (2020). Graphical models for extremes. Journal of the Royal Statistical Society: Series B (Statistical Methodology) 82 871-932. [https://doi.org/10.1111/rssb.12355](https://doi.org/10.1111/rssb.12355)
+
+[6] ASADI, P., DAVISON, A. C. and ENGELKE, S. (2015). Extremes on river networks. The Annals of Applied Statistics 9 2023 – 2050. [https://doi.org/10.1214/15-AOAS863](https://doi.org/10.1214/15-AOAS863)
 
