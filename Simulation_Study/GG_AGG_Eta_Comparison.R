@@ -86,26 +86,6 @@ scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y})})
 
-## Save the output
-saveRDS(X_to_Y, file = "Data/MVN_D20.Rdata")
-
-################################################################################
-# Read in Data
-X_to_Y <- readRDS(file = "Data/MVN_D20.Rdata")
-
-## Get starting parameters
-d <- length(X_to_Y)
-n_sim <- length(X_to_Y[[1]])
-n_data <- length(X_to_Y[[1]][[1]]$data$X)
-
-## Get the output
-u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$u)})})
-qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$qu)})})
-scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$scale)})})
-shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
-X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$X})})
-Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){X_to_Y[[j]][[i]]$data$Y})})
-
 ################################################################################
 
 ## Now we want to subset the data so that each component is large in turn
