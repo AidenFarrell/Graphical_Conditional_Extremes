@@ -12,10 +12,9 @@ layout <- cbind(danube$info$PlotCoordX, danube$info$PlotCoordY)
 V(danube_graph)$size <- 15
 V(danube_graph)$label.cex <- 2
 
-pdf(file = "Images/Danube/Inference_On_Data/Danube_River.pdf", width = 10, height = 10)
 par(mfrow = c(1, 1), mgp = c(2.3, 1, 0), mar = c(5, 4, 4, 2) + 0.1)
 plot(danube_graph, layout = layout, edge.width = 10)
-dev.off()
+
 ################################################################################
 ## Investigate the dependence in the river network
 data_frechet <- apply(apply(danube$data_clustered, 2, rank)/(nrow(danube$data_clustered) + 1), 2, qfrechet)
