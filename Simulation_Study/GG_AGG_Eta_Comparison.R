@@ -60,7 +60,7 @@ rho_true <- cov2cor(Sigma_true)
 mu_true <- runif(d, -5, 5)
 
 ## number of simulations and data points
-n_sim <- 50
+n_sim <- 200
 n_data <- 5000
 
 ## Simulate the data
@@ -143,7 +143,6 @@ while(any(sapply(Index_MVAGG, length) > 0)){
     }
   }
   count <- count + 1
-  print(paste0(count, " set of starting parameters tested"))
   if(count >= 100){
     stop("100 starting values attempted")
   }
@@ -192,7 +191,6 @@ while(any(sapply(Index_MVGG, length) > 0)){
     }
   }
   count <- count + 1
-  print(paste0(count, " set of starting parameters tested"))
   if(count >= 100){
     stop("100 starting values attempted")
   }
@@ -229,7 +227,6 @@ while(any(sapply(Index_MVGG, length) > 0)){
     }
   }
   count <- count + 1
-  print(paste0(count, " set of starting parameters tested"))
   if(count >= 100){
     stop("100 starting values attempted")
   }
