@@ -46,38 +46,41 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
   
   ## Get the conditioning sites
   cond_sites <- sample(x = 1:d, size = n_sim, replace = TRUE)
+  cond_sites_unique <- sort(unique(cond_sites))
+  n_cond_sites <- as.numeric(table(cond_sites))
+  
   ## Convert the threshold onto Laplace margins and simulate from the conditioning site
   v <- qlaplace(q)
   large_Laplace <- v +  rexp(n = n_sim, rate = 1)
+  
   ## Sample residuals from the fitted model
   Resid <- lapply(CMEVM_fits, function(x){x$Z})
-  Z_sample <- t(sapply(cond_sites, function(i){
-    unlist(unname(Resid[[i]][sample(1:nrow(Resid[[i]]), 1),]))}))
+  Z_sample <- lapply(cond_sites_unique, function(i){
+    unlist(unname(Resid[[i]][sample(1:nrow(Resid[[i]]), n_cond_sites[i], replace = TRUE),]))})
+  
   ## Convert the simulated data onto Laplace margins
-  a_hats <- lapply(CMEVM_fits, function(x){unname(x$par$main[1,])})
-  b_hats <- lapply(CMEVM_fits, function(x){unname(x$par$main[2,])})
-  a_cond_sites <- t(sapply(cond_sites, function(i){a_hats[[i]]}))
-  b_cond_sites <- t(sapply(cond_sites, function(i){b_hats[[i]]}))
-  Laplace_Samples <- matrix(NA, nrow = n_sim, ncol = d-1)
-  for(i in 1:(d-1)){
-    Laplace_Samples[,i] <- a_cond_sites[,i]*large_Laplace + (large_Laplace^(b_cond_sites[,i]))*Z_sample[,i]
-  }
-  ## Now combine Y{-i}|Y_{i} > u_{Y_{i}} and Y{-i}|Y_{i} > u_{Y_{i}}
-  Laplace_Samples_Full <- matrix(NA, nrow = n_sim, ncol = d)
-  for(i in 1:n_sim){
-    r <- cond_sites[i]
-    Laplace_Samples_Full[i,r] <- large_Laplace[i]
-    if(r == 1){
-      Laplace_Samples_Full[i,-1] <- Laplace_Samples[i,]
+  a_cond_sites <- lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[1,]})
+  b_cond_sites <- lapply(cond_sites_unique, function(i){CMEVM_fits[[i]]$par$main[2,]})
+  
+  Laplace_Samples <- vector("list", d)
+  for(i in 1:d){
+    large_Laplace_cond <- large_Laplace[cond_sites == i]
+    Y_Yi_large <- sapply(a_cond_sites[[i]], function(a){a*large_Laplace_cond}) + 
+      sapply(b_cond_sites[[i]], function(b){large_Laplace_cond^b})*Z_sample[[i]]
+    
+    ## Now combine Y{-i}|Y_{i} > u_{Y_{i}} and Y{-i}|Y_{i} > u_{Y_{i}}
+    if(i == 1){
+      Laplace_Samples[[i]] <- cbind(large_Laplace_cond, Y_Yi_large)
     }
-    else if(r == d){
-      Laplace_Samples_Full[i,-d] <- Laplace_Samples[i,]
+    else if(i == d){
+      Laplace_Samples[[i]] <- cbind(Y_Yi_large, large_Laplace_cond)
     }
     else{
-      Laplace_Samples_Full[i,(1:(r-1))] <- Laplace_Samples[i,(1:(r-1))]
-      Laplace_Samples_Full[i,((r+1):d)] <- Laplace_Samples[i,(r:(d-1))]
+      Laplace_Samples[[i]] <- cbind(Y_Yi_large[,1:(i-1)], large_Laplace_cond, Y_Yi_large[,i:(d-1)])
     }
   }
+  Laplace_Samples_Full <- do.call(rbind, Laplace_Samples)
+  
   ## Now use importance sampling to resample the simulated data
   ## Idea is to up-weight those close to the boundary and down-weight those in the
   ## centre of the spatial process
@@ -85,8 +88,27 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
   Index <- sample(x = 1:n_sim, size = n, prob = weights/sum(weights))
   ## Now we convert the data onto the original scale
   Final_Laplace_Samples <- Laplace_Samples_Full[Index,]
-  ## convert onto original scale
-  Final_Uniform_Samples <- apply(Final_Laplace_Samples, 2, plaplace, simplify = FALSE)
+  ## Above simulated Y(s) | max(Y(s)) > v
+  ## We want to get the unconditioned process
+  ## First get the data points were we have no extremes
+  data_Laplace <- sapply(transforms, function(x){x$data$Y})
+  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
+  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
+  
+  ## then get the probability we will draw from the joint tail
+  p_tail <- mean(apply(data_Laplace, 1, max) > v)
+  p_accecpt <- runif(n = n)
+  
+  ## Get the index of body/tail
+  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Tail <- which(p_accecpt < p_tail)
+  
+  ## Get the final data sets
+  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
+                                      Final_Laplace_Samples[Index_Tail,])
+  
+  ## Convert onto original scale
+  Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
   Final_Original_Samples <- mcmapply(FUN = texmex:::revTransform,
                                      x = Final_Uniform_Samples,
                                      data = lapply(transforms, function(x){x$data$X}),
@@ -97,27 +119,9 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
                                      MoreArgs = list(method = "mixture"),
                                      SIMPLIFY = TRUE,
                                      mc.cores = detectCores() - 1)
-  ## Above simulated X(s) | max(X(s)) > v
-  ## We want to get the unconditioned process
-  ## First get the data points were we have no extremes
-  data <- sapply(transforms, function(x){x$data$X})
-  data_Laplace <- sapply(transforms, function(x){x$data$Y})
-  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body <- data[Index_No_Extremes,]
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
-  ## then get the probability we will draw from the joint tail
-  Index_At_Least_One_Extreme <- which(apply(data_Laplace, 1, max) > v)
-  p_tail <- length(Index_At_Least_One_Extreme)/(n + 1)
-  p_accecpt <- runif(n)
-  ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
-  Index_Tail <- which(p_accecpt < p_tail)
-  ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
-  Data_Final_Original_Margins <- rbind(Data_Body[Index_Body,],
-                                       Final_Original_Samples[Index_Tail,])
-  return(list(Data_Margins = Data_Final_Original_Margins,
+  
+  ## Return the output
+  return(list(Data_Margins = Final_Original_Samples,
               Laplace_Margins = Data_Final_Laplace_Margins))
 }
 
@@ -204,8 +208,27 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
   Index <- sample(x = 1:n_sim, size = n, prob = weights/sum(weights))
   ## Now we convert the data onto the original scale
   Final_Laplace_Samples <- Laplace_Samples_Full[Index,]
-  ## convert onto original scale
-  Final_Uniform_Samples <- apply(Final_Laplace_Samples, 2, plaplace, simplify = FALSE)
+  ## Above simulated Y(s) | max(Y(s)) > v
+  ## We want to get the unconditioned process
+  ## First get the data points were we have no extremes
+  data_Laplace <- sapply(transforms, function(x){x$data$Y})
+  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
+  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
+  
+  ## then get the probability we will draw from the joint tail
+  p_tail <- mean(apply(data_Laplace, 1, max) > v)
+  p_accecpt <- runif(n = n)
+  
+  ## Get the index of body/tail
+  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Tail <- which(p_accecpt < p_tail)
+  
+  ## Get the final data sets
+  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
+                                      Final_Laplace_Samples[Index_Tail,])
+  
+  ## Convert onto original scale
+  Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
   Final_Original_Samples <- mcmapply(FUN = texmex:::revTransform,
                                      x = Final_Uniform_Samples,
                                      data = lapply(transforms, function(x){x$data$X}),
@@ -216,27 +239,9 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
                                      MoreArgs = list(method = "mixture"),
                                      SIMPLIFY = TRUE,
                                      mc.cores = detectCores() - 1)
-  ## Above simulated X(s) | max(X(s)) > v
-  ## We want to get the unconditioned process
-  ## First get the data points were we have no extremes
-  data <- sapply(transforms, function(x){x$data$X})
-  data_Laplace <- sapply(transforms, function(x){x$data$Y})
-  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body <- data[Index_No_Extremes,]
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
-  ## then get the probability we will draw from the joint tail
-  Index_At_Least_One_Extreme <- which(apply(data_Laplace, 1, max) > v)
-  p_tail <- length(Index_At_Least_One_Extreme)/(n + 1)
-  p_accecpt <- runif(n = n)
-  ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
-  Index_Tail <- which(p_accecpt < p_tail)
-  ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
-  Data_Final_Original_Margins <- rbind(Data_Body[Index_Body,],
-                                       Final_Original_Samples[Index_Tail,])
-  return(list(Data_Margins = Data_Final_Original_Margins,
+  
+  ## Return the output
+  return(list(Data_Margins = Final_Original_Samples,
               Laplace_Margins = Data_Final_Laplace_Margins))
 }
 
@@ -324,8 +329,27 @@ Sim_Surface_MVGG <- function(n_sim, q, transforms, CMEVM_fits){
   Index <- sample(x = 1:n_sim, size = n, prob = weights/sum(weights))
   ## Now we convert the data onto the original scale
   Final_Laplace_Samples <- Laplace_Samples_Full[Index,]
-  ## convert onto original scale
-  Final_Uniform_Samples <- apply(Final_Laplace_Samples, 2, plaplace, simplify = FALSE)
+  ## Above simulated Y(s) | max(Y(s)) > v
+  ## We want to get the unconditioned process
+  ## First get the data points were we have no extremes
+  data_Laplace <- sapply(transforms, function(x){x$data$Y})
+  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
+  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
+  
+  ## then get the probability we will draw from the joint tail
+  p_tail <- mean(apply(data_Laplace, 1, max) > v)
+  p_accecpt <- runif(n = n)
+  
+  ## Get the index of body/tail
+  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Tail <- which(p_accecpt < p_tail)
+  
+  ## Get the final data sets
+  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
+                                      Final_Laplace_Samples[Index_Tail,])
+  
+  ## Convert onto original scale
+  Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
   Final_Original_Samples <- mcmapply(FUN = texmex:::revTransform,
                                      x = Final_Uniform_Samples,
                                      data = lapply(transforms, function(x){x$data$X}),
@@ -336,26 +360,8 @@ Sim_Surface_MVGG <- function(n_sim, q, transforms, CMEVM_fits){
                                      MoreArgs = list(method = "mixture"),
                                      SIMPLIFY = TRUE,
                                      mc.cores = detectCores() - 1)
-  ## Above simulated X(s) | max(X(s)) > v
-  ## We want to get the unconditioned process
-  ## First get the data points were we have no extremes
-  data <- sapply(transforms, function(x){x$data$X})
-  data_Laplace <- sapply(transforms, function(x){x$data$Y})
-  Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body <- data[Index_No_Extremes,]
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
-  ## then get the probability we will draw from the joint tail
-  Index_At_Least_One_Extreme <- which(apply(data_Laplace, 1, max) > v)
-  p_tail <- length(Index_At_Least_One_Extreme)/(n + 1)
-  p_accecpt <- runif(n = n)
-  ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
-  Index_Tail <- which(p_accecpt < p_tail)
-  ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
-  Data_Final_Original_Margins <- rbind(Data_Body[Index_Body,],
-                                       Final_Original_Samples[Index_Tail,])
-  return(list(Data_Margins = Data_Final_Original_Margins,
+  
+  ## Return the output
+  return(list(Data_Margins = Final_Original_Samples,
               Laplace_Margins = Data_Final_Laplace_Margins))
 }
