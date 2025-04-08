@@ -156,7 +156,7 @@ Cond_Extremes_MVAGG <- function(data, cond, graph = NA, start,
         ## exactly independent
         comps <- components(graph_cond)
         n_comps <- comps$no
-        v_comps <- groups(comps)
+        v_comps <- igraph::groups(comps)
         g_comps <- lapply(v_comps, function(i){subgraph(graph_cond, i)})
         res_1 <- list()
         for(i in 1:n_comps){
