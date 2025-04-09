@@ -93,19 +93,19 @@ Sim_Surface_HT <- function(n_sim, q, transforms, CMEVM_fits){
   ## First get the data points were we have no extremes
   data_Laplace <- sapply(transforms, function(x){x$data$Y})
   Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
   
   ## then get the probability we will draw from the joint tail
   p_tail <- mean(apply(data_Laplace, 1, max) > v)
   p_accecpt <- runif(n = n)
   
   ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Body <- sample(x = Index_No_Extremes, size = length(which(p_accecpt >= p_tail)), replace = TRUE)
   Index_Tail <- which(p_accecpt < p_tail)
   
   ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
+  Data_Final_Laplace_Margins <- matrix(NA, nrow = n, ncol = d)
+  Data_Final_Laplace_Margins[-Index_Tail,] <- data_Laplace[Index_Body,]
+  Data_Final_Laplace_Margins[Index_Tail,] <- Final_Laplace_Samples[Index_Tail,]
   
   ## Convert onto original scale
   Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
@@ -213,19 +213,19 @@ Sim_Surface_MVAGG <- function(n_sim, q, transforms, CMEVM_fits){
   ## First get the data points were we have no extremes
   data_Laplace <- sapply(transforms, function(x){x$data$Y})
   Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
   
   ## then get the probability we will draw from the joint tail
   p_tail <- mean(apply(data_Laplace, 1, max) > v)
   p_accecpt <- runif(n = n)
   
   ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Body <- sample(x = Index_No_Extremes, size = length(which(p_accecpt >= p_tail)), replace = TRUE)
   Index_Tail <- which(p_accecpt < p_tail)
   
   ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
+  Data_Final_Laplace_Margins <- matrix(NA, nrow = n, ncol = d)
+  Data_Final_Laplace_Margins[-Index_Tail,] <- data_Laplace[Index_Body,]
+  Data_Final_Laplace_Margins[Index_Tail,] <- Final_Laplace_Samples[Index_Tail,]
   
   ## Convert onto original scale
   Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
@@ -334,19 +334,19 @@ Sim_Surface_MVGG <- function(n_sim, q, transforms, CMEVM_fits){
   ## First get the data points were we have no extremes
   data_Laplace <- sapply(transforms, function(x){x$data$Y})
   Index_No_Extremes <- which(apply(data_Laplace, 1, max) < v)
-  Data_Body_Laplace <- data_Laplace[Index_No_Extremes,]
   
   ## then get the probability we will draw from the joint tail
   p_tail <- mean(apply(data_Laplace, 1, max) > v)
   p_accecpt <- runif(n = n)
   
   ## Get the index of body/tail
-  Index_Body <- sample(x = 1:length(Index_No_Extremes), size = length(which(p_accecpt >= p_tail)), replace = TRUE)
+  Index_Body <- sample(x = Index_No_Extremes, size = length(which(p_accecpt >= p_tail)), replace = TRUE)
   Index_Tail <- which(p_accecpt < p_tail)
   
   ## Get the final data sets
-  Data_Final_Laplace_Margins <- rbind(Data_Body_Laplace[Index_Body,],
-                                      Final_Laplace_Samples[Index_Tail,])
+  Data_Final_Laplace_Margins <- matrix(NA, nrow = n, ncol = d)
+  Data_Final_Laplace_Margins[-Index_Tail,] <- data_Laplace[Index_Body,]
+  Data_Final_Laplace_Margins[Index_Tail,] <- Final_Laplace_Samples[Index_Tail,]
   
   ## Convert onto original scale
   Final_Uniform_Samples <- apply(Data_Final_Laplace_Margins, 2, plaplace, simplify = FALSE)
