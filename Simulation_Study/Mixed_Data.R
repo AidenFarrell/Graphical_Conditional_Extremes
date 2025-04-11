@@ -111,7 +111,7 @@ Sigma_MVN <- solve(Gamma_MVN)
 rho_MVN <- cov2cor(Sigma_MVN)
 
 ## Generate the data
-n_sim = 10
+n_sim <- 200
 X <- replicate(n = n_sim,
                expr = mixed_data_generation(n_data = n_data,
                                             Gamma_MVP = Gamma_MVP,
