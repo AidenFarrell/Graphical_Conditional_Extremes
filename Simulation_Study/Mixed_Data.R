@@ -16,15 +16,17 @@ mixed_data_generation <- function(n_data, Gamma_MVP, Sigma_MVN){
   data_Gaussian <- qnorm(apply(data_Pareto, 2, rank)/(n_data + 1))
   
   ## Get conditional mean and correlation matrix given X3
-  mean_cond <- sapply(Sigma_MVN[1,-1], function(x){x*data_Gaussian[,3]})
+  norm_constant <- Sigma_MVN[1,-1]%*%solve(Sigma_MVN[1,1])
+  mean_cond <- lapply(data_Gaussian[,3], function(x){norm_constant*x})
   Sigma_cond <- Cond_Sigma(Sigma_MVN, 1)
   rho_cond <- cov2cor(Sigma_cond)
   
   ## Obtain remaining data conditional on X3
-  data_MVN <- matrix(NA, nrow = n_data, ncol = 2)
-  for(i in 1:n_data){ 
-    data_MVN[i,] <- mvtnorm::rmvnorm(n = 1, mean = mean_cond[i,], sigma = rho_cond)
-  }
+  data_MVN <- t(mcmapply(FUN = mvtnorm::rmvnorm,
+                         mean = mean_cond,
+                         MoreArgs = list(n = 1, sigma = rho_cond),
+                         SIMPLIFY = TRUE,
+                         mc.cores = detectCores() - 1))
   
   ## return all data
   data_all <- cbind(data_Gaussian, data_MVN)
@@ -51,31 +53,31 @@ source("Prediction/Conditonal_Probability_Calculations.R")
 source("Prediction/Sim_Surfaces.R")
 
 ################################################################################
-## Read in data
-out <- readRDS("Data/Mixed_Data_D5.RData")
-
-## Obtain the true parameters
-graph_full <- out$par_true$graph
-d <- length(V(graph_full))
-n_sim <- out$par_true$n_sim
-n_data <- out$par_true$n_data
-
-Gamma_MVP <- out$par_true$Gamma_MVP
-Gamma_MVN <- out$par_true$Gamma_MVN
-Sigma_MVN <- solve(Gamma_MVN)
-
-## Transforms
-X_to_Y <- out$transforms
-
-## Obtain the data
-X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
-Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
-
-## Get the output from the GPD fits
-u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
-qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
-scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
-shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
+# ## Read in data
+# out <- readRDS("Data/Mixed_Data_D5.RData")
+# 
+# ## Obtain the true parameters
+# graph_full <- out$par_true$graph
+# d <- length(V(graph_full))
+# n_sim <- out$par_true$n_sim
+# n_data <- out$par_true$n_data
+# 
+# Gamma_MVP <- out$par_true$Gamma_MVP
+# Gamma_MVN <- out$par_true$Gamma_MVN
+# Sigma_MVN <- solve(Gamma_MVN)
+# 
+# ## Transforms
+# X_to_Y <- out$transforms
+# 
+# ## Obtain the data
+# X <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$X)})})
+# Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$data$Y)})})
+# 
+# ## Get the output from the GPD fits
+# u_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$u)})})
+# qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$qu)})})
+# scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$scale)})})
+# shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(out$transforms[[j]][[i]]$par$shape)})})
 
 ################################################################################
 ## DO NOT RUN
@@ -109,7 +111,7 @@ Sigma_MVN <- solve(Gamma_MVN)
 rho_MVN <- cov2cor(Sigma_MVN)
 
 ## Generate the data
-n_sim = 200
+n_sim = 10
 X <- replicate(n = n_sim,
                expr = mixed_data_generation(n_data = n_data,
                                             Gamma_MVP = Gamma_MVP,
@@ -122,7 +124,7 @@ X_list_by_var <- lapply(1:d, function(i){lapply(1:n_sim, function(j){X_list_by_d
 X_to_Y <- lapply(X_list_by_var, function(x){
   mcmapply(x = x,
            FUN = X_to_Laplace,
-           MoreArgs = list(q = seq(0.55, 0.99, by = 0.01)),
+           MoreArgs = list(q = 0.9),
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
@@ -132,6 +134,12 @@ qu_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j
 scale_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$scale)})})
 shape_final <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$par$shape)})})
 Y <- lapply(1:n_sim, function(i){sapply(1:d, function(j){unname(X_to_Y[[j]][[i]]$data$Y)})})
+
+## Save the output
+# out <- list(transforms = X_to_Y,
+#             par_true = list(n_sim = n_sim, n_data = n_data,
+#                             Gamma_MVP = Gamma_MVP, Gamma_MVN = Gamma_MVN, graph = graph_full))
+# saveRDS(out, file = "Data/Mixed_Data_D5.RData")
 
 ################################################################################
 
@@ -186,6 +194,7 @@ start_par_One_Step <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
   cbind(rep(0.5, d-1), rep(0.1, d-1), loc_start_One_Step[[j]][[k]],
         rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))})})
 
+## One-step
 ## Graphical
 fit_One_Step_Graph <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG,
@@ -198,13 +207,22 @@ fit_One_Step_Graph <- lapply(1:d, function(i){
            SIMPLIFY = FALSE,
            mc.cores = detectCores() - 1)})
 
+start_par_HT <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
+  cbind(rep(0.5, d-1), rep(0.1, d-1))})})
+
+start_par_AGG <- lapply(1:d, function(j){lapply(1:n_sim, function(k){
+  cbind(loc_start_One_Step[[j]][[k]],
+        rep(1.5, d-1), rep(2, d-1), rep(1.5, d-1))})})
+
+## Two-step
 ## Graphical
 fit_Two_Step_Graph <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG_Two_Step,
            data = Y_Yi_large[[i]],
+           start_HT = start_par_HT[[i]],
+           start_AGG = start_par_AGG[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
-                           start_HT = c(0.5, 0.1),
                            v = v,
                            maxit = 1e+9,
                            nOptim = 2),
@@ -216,9 +234,10 @@ fit_Two_Step_Graph <- lapply(1:d, function(i){
 fit_Three_Step_Indep <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG_Three_Step,
            data = Y_Yi_large[[i]],
+           start_HT = start_par_HT[[i]],
+           start_AGG = start_par_AGG[[i]],
            MoreArgs = list(graph = NA,
                            cond = i,
-                           start_HT = c(0.5, 0.1),
                            v = v,
                            maxit = 1e+9,
                            nOptim = 2),
@@ -229,9 +248,10 @@ fit_Three_Step_Indep <- lapply(1:d, function(i){
 fit_Three_Step_Graph <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG_Three_Step,
            data = Y_Yi_large[[i]],
+           start_HT = start_par_HT[[i]],
+           start_AGG = start_par_AGG[[i]],
            MoreArgs = list(graph = graph_full,
                            cond = i,
-                           start_HT = c(0.5, 0.1),
                            v = v,
                            maxit = 1e+9,
                            nOptim = 2),
@@ -242,9 +262,10 @@ fit_Three_Step_Graph <- lapply(1:d, function(i){
 fit_Three_Step_Full <- lapply(1:d, function(i){
   mcmapply(FUN = Cond_Extremes_MVAGG_Three_Step,
            data = Y_Yi_large[[i]],
+           start_HT = start_par_HT[[i]],
+           start_AGG = start_par_AGG[[i]],
            MoreArgs = list(graph = make_full_graph(n = d),
                            cond = i,
-                           start_HT = c(0.5, 0.1),
                            v = v,
                            maxit = 1e+9,
                            nOptim = 2),
@@ -652,7 +673,7 @@ dev.off()
 ## "true" probabilities from the underlying probability distribution which are calculated
 ## using a point estimate from simulating a large number of data points from the
 ## true distribution
-X_prob_calc <- mixed_data_generation(n_data = 1e+7,
+X_prob_calc <- mixed_data_generation(n_data = 1e+6,
                                      Gamma_MVP = Gamma_MVP,
                                      Sigma_MVN = Sigma_MVN)
 
@@ -674,7 +695,7 @@ X_EH_Original_Margins <- lapply(1:n_sim, function(i){sapply(1:d, function(j){
 X_HT <- mcmapply(FUN = Sim_Surface_HT,
                  transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                  CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_HT[[j]][[i]]})}),
-                 MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                 MoreArgs = list(n_sim = 5*n_data, q = dqu),
                  SIMPLIFY = FALSE,
                  mc.cores = detectCores() - 1)
 
@@ -682,7 +703,7 @@ X_HT <- mcmapply(FUN = Sim_Surface_HT,
 X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_One_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 5*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -690,7 +711,7 @@ X_One_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                              transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                              CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Two_Step_Graph[[j]][[i]]})}),
-                             MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                             MoreArgs = list(n_sim = 5*n_data, q = dqu),
                              SIMPLIFY = FALSE,
                              mc.cores = detectCores() - 1)
 
@@ -698,7 +719,7 @@ X_Two_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Indep[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 5*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -706,7 +727,7 @@ X_Three_Step_Indep <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
                                transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                                CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Graph[[j]][[i]]})}),
-                               MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                               MoreArgs = list(n_sim = 5*n_data, q = dqu),
                                SIMPLIFY = FALSE,
                                mc.cores = detectCores() - 1)
 
@@ -714,7 +735,7 @@ X_Three_Step_Graph <- mcmapply(FUN = Sim_Surface_MVAGG,
 X_Three_Step_Full <- mcmapply(FUN = Sim_Surface_MVAGG,
                               transforms = lapply(1:n_sim, function(i){lapply(1:d, function(j){X_to_Y[[j]][[i]]})}),
                               CMEVM_fits = lapply(1:n_sim, function(i){lapply(1:d, function(j){fit_Three_Step_Full[[j]][[i]]})}),
-                              MoreArgs = list(n_sim = 10*n_data, q = dqu),
+                              MoreArgs = list(n_sim = 5*n_data, q = dqu),
                               SIMPLIFY = FALSE,
                               mc.cores = detectCores() - 1)
 
@@ -726,46 +747,48 @@ uncon <- lapply(uncon, function(x){do.call(c, lapply(x, function(y){
 }))})
 
 ## threshold above which to calculate the probabilities
-u_X <- rep(2.75, d)
+u_X <- matrix(apply(X_prob_calc, 2, quantile, probs = 0.95),
+              nrow = d, ncol = d, byrow = TRUE)
+diag(u_X) <- apply(X_prob_calc, 2, quantile, probs = 0.9)
 
 p_true_X <- t(sapply(1:d, function(i){
   sapply(uncon[[i]], function(z){
-    p_data_surv_multi(data = X_prob_calc, cond = i, u = u_X, uncon = z)})}))
+    p_data_surv_multi(data = X_prob_calc, cond = i, u = u_X[i,], uncon = z)})}))
 
 p_EH <- lapply(1:d, function(i){
   t(sapply(X_EH_Original_Margins, function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_HT <- lapply(1:d, function(i){
   t(sapply(lapply(X_HT, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_One_Step_Graph <- lapply(1:d, function(i){
   t(sapply(lapply(X_One_Step_Graph, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_Two_Step_Graph <- lapply(1:d, function(i){
   t(sapply(lapply(X_Two_Step_Graph, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_Three_Step_Indep <- lapply(1:d, function(i){
   t(sapply(lapply(X_Three_Step_Indep, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_Three_Step_Graph <- lapply(1:d, function(i){
   t(sapply(lapply(X_Three_Step_Graph, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 p_Three_Step_Full <- lapply(1:d, function(i){
   t(sapply(lapply(X_Three_Step_Full, function(x){x$Data_Margins}), function(y){
     sapply(uncon[[i]], function(z){
-      p_data_surv_multi(data = y, cond = i, u = u_X, uncon = z)})}))})
+      p_data_surv_multi(data = y, cond = i, u = u_X[i,], uncon = z)})}))})
 
 
 ## Compare the probability estimation
@@ -833,12 +856,7 @@ for(i in 1:d){
             axis.text.x = element_blank(), 
             axis.ticks.x = element_blank()) +
       geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 1)
-    if(i == 4 | i == 5){
-      p_plot <- p_plot + lims(y = c(ymin, max(0.3, ymax)))
-    }
-    else{
-      p_plot <- p_plot + lims(y = c(min(-0.6, ymin), max(1, ymax)))
-    }
+    p_plot <- p_plot + lims(y = c(ymin, max(0.3, ymax)))
     print(p_plot)
     dev.off()
   }
@@ -956,6 +974,7 @@ u_max <- rbind(apply(sapply(X_EH_Original_Margins, function(x){apply(x, 2, max)}
                apply(X_prob_calc, 2, max))
 u_max <- unname(apply(u_max, 2, max))
 
+u_X <- apply(X_prob_calc, 2, quantile, probs = 0.9)
 u_dep <- lapply(1:d, function(i){seq(from = u_X[i], to = u_max[i], by = 0.01)})
 
 surv_EH <- lapply(1:d, function(i){lapply((1:d)[-i], function(j){
@@ -1107,9 +1126,4 @@ for(i in 1:d){
   dev.off()
 }
 
-################################################################################
-# out <- list(transforms = X_to_Y,
-#             par_true = list(n_sim = n_sim, n_data = n_data,
-#                             Gamma_MVP = Gamma_MVP, Gamma_MVN = Gamma_MVN, graph = graph_full))
-# saveRDS(out, file = "Data/Mixed_Data_D5.RData")
 ################################################################################
