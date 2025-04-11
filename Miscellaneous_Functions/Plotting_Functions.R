@@ -145,7 +145,8 @@ boxplot_MLEs_Cov_Mat <- function(data, methods, y_lab){
     guides(colour = guide_legend(nrow = 1)) +
     labs(y = y_lab) +
     facet_grid(rows = vars(Conditioning_Varaible), labeller = labeller(Conditioning_Varaible = facet_labels),
-               cols = vars(Pair)) +
+               cols = vars(Pair),
+               scales = "free_y") +
     geom_hline(yintercept = 0, col = "black", linetype = "dashed", linewidth = 0.25)
   
   return(plot_out)
